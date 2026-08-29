@@ -1,0 +1,26 @@
+# Configuración de ejemplo de OSAP Support (valores NO secretos).
+# Secretos por variables de entorno (prefijo OSAP_SUPPORT_*).
+# Copiar a config.yaml y ajustar al entorno.
+
+app:
+  env: development
+  debug: false
+
+server:
+  host: 127.0.0.1
+  port: 8300
+
+cors_origins: []
+
+database:
+  host: 127.0.0.1
+  port: 3306
+  name: osap_support
+  user: osap2027
+  # password por entorno o en config.yaml: OSAP_SUPPORT_DB_PASSWORD
+
+# Integración con Auth (ADR-002): solo si se define en esta fase.
+# auth:
+#   jwks_uri: https://auth.osap/auth/.well-known/jwks.json
+#   issuer: https://auth.osap
+#   audience: osap-support
