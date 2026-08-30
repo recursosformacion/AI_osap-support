@@ -6,7 +6,13 @@ Contratos estables (SOURCE OF TRUTH): identidad (ADR-002), pagos (ADR-005) y ema
 
 from .email import EmailMessage, EmailSender
 from .identity import IdentityError, IdentityProviderProtocol, IdentityResolver
-from .payment import CheckoutSession, PaymentProvider, PaymentReference
+from .payment import (
+    CheckoutSession,
+    PaymentMode,
+    PaymentProvider,
+    PaymentProviderEvent,
+    PaymentReference,
+)
 
 __all__ = [
     "CheckoutSession",
@@ -15,6 +21,8 @@ __all__ = [
     "IdentityError",
     "IdentityProviderProtocol",
     "IdentityResolver",
+    "PaymentMode",
     "PaymentProvider",
+    "PaymentProviderEvent",
     "PaymentReference",
 ]

@@ -60,6 +60,9 @@ class ServerConfig:
     env: str = "development"
     debug: bool = False
     cors_origins: list[str] = []
+    # Identidad estática SOLO para dev/test (JWKS productivo queda ABIERTO, ADR-002).
+    dev_token: str = "dev-token"
+    dev_user_id: str = "dev-user"
 
 
 class Settings:

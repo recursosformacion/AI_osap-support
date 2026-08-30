@@ -5,6 +5,7 @@ __pycache__/
 
 # Config local (secrets) — copiar desde config.example.yaml
 config.yaml
+config.production.yaml
 
 # Entorno de desarrollo
 *.egg-info/

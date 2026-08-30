@@ -31,6 +31,32 @@ class SqlAlchemyCommunicationEventRepository(CommunicationEventRepository):
         ).scalars().all()
         return [self._to_domain(m) for m in models]
 
+    def list_pending(self) -> list[CommunicationEvent]:
+        from datetime import UTC, datetime
+
+        now = datetime.now(UTC)
+        retryable = [
+            CommunicationEventStatus.PENDING.value,
+            CommunicationEventStatus.FAILED.value,
+        ]
+        models = (
+            self._session.execute(
+                select(CommunicationEventModel).where(
+                    CommunicationEventModel.status.in_(retryable),
+                    (CommunicationEventModel.next_attempt_at.is_(None))
+                    | (CommunicationEventModel.next_attempt_at <= now),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return [self._to_domain(m) for m in models]
+
+    def update(self, event: CommunicationEvent) -> CommunicationEvent:
+        self._session.merge(self._to_model(event))
+        self._session.flush()
+        return event
+
     def _to_model(self, e: CommunicationEvent) -> CommunicationEventModel:
         return CommunicationEventModel(
             id=e.id,

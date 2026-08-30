@@ -12,7 +12,10 @@ from domain import ports
 
 def test_ports_are_importable() -> None:
     assert callable(ports.IdentityResolver.resolve_user_id)
-    assert callable(ports.PaymentProvider.create_membership_checkout)
+    assert callable(ports.PaymentProvider.create_checkout)
+    assert callable(ports.PaymentProvider.resolve_customer)
+    assert callable(ports.PaymentProvider.get_subscription)
+    assert callable(ports.PaymentProvider.parse_webhook)
     assert callable(ports.EmailSender.send)
 
 

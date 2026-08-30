@@ -12,13 +12,20 @@ from collections.abc import Iterator
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
 from infrastructure.db.models import Base
 
 
 @pytest.fixture
 def db_session() -> Iterator[Session]:
-    engine = create_engine("sqlite:///:memory:")
+    # SQLite en memoria compartida entre threads (TestClient usa un hilo distinto):
+    # StaticPool mantiene UNA conexión compartida y check_same_thread=False lo permite.
+    engine = create_engine(
+        "sqlite://",
+        poolclass=StaticPool,
+        connect_args={"check_same_thread": False},
+    )
     Base.metadata.create_all(engine)
     with Session(engine) as session:
         yield session

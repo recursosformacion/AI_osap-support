@@ -71,3 +71,11 @@ class CommunicationEventRepository(ABC):
 
     @abstractmethod
     def list_by_user(self, user_id: str) -> list[CommunicationEvent]: ...
+
+    @abstractmethod
+    def list_pending(self) -> list[CommunicationEvent]:
+        """Comunicaciones pendientes de envío (worker, ADR-006)."""
+
+    @abstractmethod
+    def update(self, event: CommunicationEvent) -> CommunicationEvent:
+        """Persiste los cambios de estado del evento (sent/failed/attempts)."""
