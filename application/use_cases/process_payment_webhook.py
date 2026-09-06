@@ -218,36 +218,72 @@ class ProcessPaymentWebhookUseCase:
     def _apply_membership(
         self, event: PaymentProviderEvent, domain_type: MembershipDomainEventType
     ) -> None:
-        user_id = event.user_id
-        if user_id is None:
-            return  # sin identidad → sin efecto (ADR-002: no inventar identidad)
+        meta = event.metadata
+        subscription_id = _s(meta.get("subscription_id")) or ""
 
+        # Binding robusto (paypal E2E): el evento puede traer custom_id o no.
+        # 1) user_id (custom_id) presente → binding directo en la creación.
         if domain_type == MembershipDomainEventType.CREATED:
+            if event.user_id is None:
+                return  # sin identidad → sin efecto (no inventar, ADR-002)
             self._create_membership_from_subscription(event)
             return
 
-        # Para transiciones se busca la Membership existente del usuario.
-        membership = self._memberships.list_by_user(user_id)
-        if not membership:
-            return
-        current = membership[0]
+        # 2) Transiciones: buscar la membership por subscription_id (binding real por
+        #    PayPal), NO por list_by_user[0] (evita mezclar suscripciones del usuario).
+        membership = None
+        if subscription_id:
+            membership = self._memberships.get_by_subscription(
+                event.provider, subscription_id
+            )
+        if membership is None and event.user_id is not None:
+            rows = self._memberships.list_by_user(event.user_id)
+            membership = rows[0] if rows else None
+        if membership is None:
+            return  # sin membership a la que aplicar la transición
+
+        # Fallback de binding: sin custom_id pero con subscription_id + membership
+        # PENDING/ACTIVA local → la identidad es la de esa membership (bind indirecto).
+        effective_user_id = event.user_id or membership.user_id
+
+        # El mismo webhook de pago significa cosas distintas según el estado actual:
+        # - membership ACTIVE + payment.succeeded → RENOVACIÓN (refresca fechas);
+        # - membership PAST_DUE + payment.succeeded → RECUPERACIÓN.
+        if domain_type == MembershipDomainEventType.ACTIVATED:
+            if membership.status is MembershipStatus.ACTIVE:
+                domain_type = MembershipDomainEventType.RENEWED
+            elif membership.status is MembershipStatus.PAST_DUE:
+                domain_type = MembershipDomainEventType.RECOVERED
+
+        # Fechas reales de PayPal (billing_info.next_billing_time / start_time) tienen
+        # prioridad; la máquina solo computa cuando no vienen (next_renewal_at None).
+        next_at = _parse_iso(_s(meta.get("next_billing_time")))
+        if next_at is not None:
+            membership.next_renewal_at = next_at
+        started = _parse_iso(_s(meta.get("start_time")))
+        if started is not None and membership.started_at is None:
+            membership.started_at = started
+
         domain_event = DomainEvent(
             event_type=domain_type,
-            user_id=user_id,
+            user_id=effective_user_id,
             provider_event_id=event.provider_event_id,
             occurred_at=event.received_at,
         )
-        # Re-aplicar en el objeto (los repos devuelven objetos vivos de la sesión).
-        self._machine.apply(current, domain_event)
-        self._memberships.add(current)
+        self._machine.apply(membership, domain_event)
+        self._memberships.add(membership)
 
     def _create_membership_from_subscription(self, event: PaymentProviderEvent) -> None:
         meta = event.metadata
         subscription_id = _s(meta.get("subscription_id")) or event.provider_event_id
         amount_minor = _i(meta.get("amount_minor"))
         currency = _s(meta.get("currency")) or "EUR"
+        # plan_id → level/periodicity resuelto por el provider (nunca defaults si el
+        # plan real está configurado).
         periodicity = Periodicity(_s(meta.get("periodicity")) or "monthly")
         level = MembershipLevel(_s(meta.get("level")) or "supporter")
+        started = _parse_iso(_s(meta.get("start_time")))
+        next_at = _parse_iso(_s(meta.get("next_billing_time")))
         membership = Membership(
             id=None,
             user_id=event.user_id or "",
@@ -259,6 +295,8 @@ class ProcessPaymentWebhookUseCase:
             provider=event.provider,
             customer_id=_s(meta.get("customer_id")) or "",
             subscription_id=subscription_id,
+            started_at=started,
+            next_renewal_at=next_at,
             email_contact=_s(meta.get("email_contact")) or "",
         )
         self._memberships.add(membership)
@@ -304,6 +342,20 @@ class ProcessPaymentWebhookUseCase:
             origin_event_id=payment_event.id,
         )
         self._communications.add(communication)
+
+
+def _parse_iso(value: str) -> datetime | None:
+    """ISO8601 (PayPal, con o sin offset) → datetime naive UTC para la BD."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(UTC)
+        parsed = parsed.replace(tzinfo=None)
+    return parsed
 
 
 def _s(value: object) -> str:

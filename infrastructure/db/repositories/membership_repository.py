@@ -21,9 +21,15 @@ class SqlAlchemyMembershipRepository(MembershipRepository):
 
     def add(self, membership: Membership) -> Membership:
         model = self._to_model(membership)
-        self._session.add(model)
-        self._session.flush()
-        membership.id = model.id
+        if membership.id is None:
+            # Nuevo: insert + asignación del id interno.
+            self._session.add(model)
+            self._session.flush()
+            membership.id = model.id
+        else:
+            # Existente (transición): merge para actualizar la fila (no duplica UNIQUE id).
+            self._session.merge(model)
+            self._session.flush()
         return membership
 
     def get_by_subscription(self, provider: str, subscription_id: str) -> Membership | None:

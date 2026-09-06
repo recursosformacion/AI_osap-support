@@ -96,6 +96,15 @@ class PayPalPaymentProvider(BasePaymentProvider):
         self._base = _API_BASE[mode]
         self._http = http_client or httpx.Client(timeout=20.0)
         self._access_token: str | None = None
+        # Inversa plan_id → (level, periodicity): el webhook solo trae plan_id y el
+        # binding no debe quedarse en supporter/monthly por defecto.
+        self._plan_level_periodicity: dict[str, tuple[str, str]] = {
+            plan_id: key for key, plan_id in self._plan_ids.items() if plan_id
+        }
+
+    def resolve_plan(self, plan_id: str) -> tuple[str, str] | None:
+        """plan_id PayPal → (level, periodicity) de la configuración, si existe."""
+        return self._plan_level_periodicity.get(plan_id)
 
     # -- internals ------------------------------------------------------------
 
@@ -176,15 +185,25 @@ class PayPalPaymentProvider(BasePaymentProvider):
         raw_resource = data.get("resource")
         resource: dict[Any, Any] = raw_resource if isinstance(raw_resource, dict) else {}
         raw_payload = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        plan_id = _extract_plan_id(resource)
+        resolved = self.resolve_plan(plan_id) if plan_id else None
         meta = {
             "resource": resource,
+            "plan_id": plan_id,
             "amount_minor": _extract_amount_minor(resource),
             "currency": _extract_currency(resource),
             "email_contact": _extract_email(resource),
             "subscription_id": _extract_subscription_id(resource),
             "order_id": _extract_order_id(resource),
             "charge_id": _extract_capture_id(resource),
+            "start_time": _extract_start_time(resource),
+            "next_billing_time": _extract_next_billing_time(resource),
         }
+        # plan_id → (level, periodicity): NUNCA defaults supporter/monthly si el plan
+        # de la suscripción real está en la configuración (binding inequívoco).
+        if resolved is not None:
+            meta["level"] = resolved[0]
+            meta["periodicity"] = resolved[1]
         return PaymentProviderEvent(
             provider="paypal",
             provider_event_id=event_id,
@@ -323,6 +342,42 @@ class PayPalPaymentProvider(BasePaymentProvider):
 
 
 # --- helpers de extracción ---------------------------------------------------
+
+
+def _extract_plan_id(resource: dict) -> str:
+    """plan_id de la suscripción (el webhook no trae level/periodicity)."""
+    plan_id = resource.get("plan_id")
+    return str(plan_id) if plan_id else ""
+
+
+def _extract_next_billing_time(resource: dict) -> str:
+    billing = resource.get("billing_info")
+    if isinstance(billing, dict):
+        value = billing.get("next_billing_time")
+        if isinstance(value, str) and value:
+            return value
+    return ""
+
+
+def _extract_start_time(resource: dict) -> str:
+    value = resource.get("start_time")
+    if isinstance(value, str) and value:
+        return value
+    return ""
+
+
+def _parse_iso_to_naive_utc(value: str) -> datetime | None:
+    """ISO8601 de PayPal (con o sin offset) → datetime naive UTC para la BD."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(UTC)
+            parsed = parsed.replace(tzinfo=None)
+        return parsed
+    except ValueError:
+        return None
 
 
 def _extract_custom_id(resource: dict, envelope: dict) -> str | None:

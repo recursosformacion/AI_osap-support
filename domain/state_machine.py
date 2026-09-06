@@ -60,10 +60,12 @@ class MembershipStateMachine:
         allowed = self._ALLOWED.get(current, set())
 
         # Renovación: válida sobre active, actualiza fechas (active→active, §6).
+        # La fecha real de PayPal (next_renewal_at ya fijado por el UC) tiene prioridad.
         if event_type == _RENEWED and current == MembershipStatus.ACTIVE:
             membership.status = MembershipStatus.ACTIVE
             membership.renewed_at = event.occurred_at
-            membership.next_renewal_at = self._next_renewal(membership)
+            if membership.next_renewal_at is None:
+                membership.next_renewal_at = self._next_renewal(membership)
             return TransitionResult(MembershipStatus.ACTIVE, True, "renovada")
 
         # Eventos que solo son válidos si ya reflejan el estado (idempotencia):
@@ -81,7 +83,8 @@ class MembershipStateMachine:
             membership.status = MembershipStatus.ACTIVE
             if membership.started_at is None:
                 membership.started_at = event.occurred_at
-            membership.next_renewal_at = self._next_renewal(membership)
+            if membership.next_renewal_at is None:
+                membership.next_renewal_at = self._next_renewal(membership)
             return TransitionResult(MembershipStatus.ACTIVE, True, "activada")
 
         if event_type == _PAYMENT_FAILURE:
@@ -91,7 +94,8 @@ class MembershipStateMachine:
         if event_type == _RECOVERED:
             membership.status = MembershipStatus.ACTIVE
             membership.renewed_at = event.occurred_at
-            membership.next_renewal_at = self._next_renewal(membership)
+            if membership.next_renewal_at is None:
+                membership.next_renewal_at = self._next_renewal(membership)
             return TransitionResult(MembershipStatus.ACTIVE, True, "recuperada")
 
         if event_type == _CANCELLED:
