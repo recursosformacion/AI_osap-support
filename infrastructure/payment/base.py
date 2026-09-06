@@ -33,6 +33,8 @@ class BasePaymentProvider(PaymentProvider):
         amount_minor: int,
         currency: str,
         return_url: str,
+        level: str | None = None,
+        periodicity: str | None = None,
     ) -> CheckoutSession: ...
 
     @abstractmethod

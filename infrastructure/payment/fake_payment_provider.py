@@ -32,9 +32,15 @@ class FakePaymentProvider(BasePaymentProvider):
         amount_minor: int,
         currency: str,
         return_url: str,
+        level: str | None = None,
+        periodicity: str | None = None,
     ) -> CheckoutSession:
         session = CheckoutSession(
-            checkout_url=f"https://{self.provider_id}-pay/{user_id}/{mode.value}",
+            checkout_url=(
+                f"https://{self.provider_id}-pay/{user_id}/{mode.value}/{level}/{periodicity}"
+                if mode == PaymentMode.MEMBERSHIP
+                else f"https://{self.provider_id}-pay/{user_id}/{mode.value}"
+            ),
             return_url=return_url,
             provider_session_id=f"sess-{user_id}-{len(self.checkouts)}",
             mode=mode,

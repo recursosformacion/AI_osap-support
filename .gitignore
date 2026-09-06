@@ -3,7 +3,9 @@
 __pycache__/
 *.py[cod]
 
-# Config local (secrets) — copiar desde config.example.yaml
+# Config local (secrets) — convención ecosistema: osap.toml (dev) / osap.production.toml (prod)
+osap.toml
+osap.production.toml
 config.yaml
 config.production.yaml
 

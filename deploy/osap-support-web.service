@@ -1,0 +1,22 @@
+# OSAP Support — unit systemd para el proceso WEB (uvicorn, puerto 8300).
+# Copiar a /etc/systemd/system/osap-support-web.service.
+# Secretos vía /etc/osap-support/env (EnvironmentFile) — nunca en el repo.
+
+[Unit]
+Description=OSAP Support API (web)
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=osap
+Group=osap
+WorkingDirectory=/opt/osap-support
+EnvironmentFile=/etc/osap-support/env
+ExecStart=/opt/osap-support/.venv/bin/osap-support-web
+Restart=always
+RestartSec=5
+# Readiness real: el proceso solo está "healthy" si la BD responde (GET /ready).
+# Liveness: GET /health.
+
+[Install]
+WantedBy=multi-user.target

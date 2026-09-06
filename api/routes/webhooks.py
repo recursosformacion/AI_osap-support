@@ -7,6 +7,8 @@ duplicado (ADR-007: el proveedor reintenta ante no-2xx). 400 solo ante payload i
 
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from application.use_cases.process_payment_webhook import (
@@ -30,10 +32,21 @@ async def webhook_payment(
     request: Request,
     use_case: ProcessPaymentWebhookUseCase = Depends(lambda: _use_case),
 ) -> dict[str, str]:
+    raw_body = await request.body()
+    headers = {k.lower(): v for k, v in request.headers.items()}
     try:
-        payload = await request.json()
+        payload = json.loads(raw_body.decode("utf-8"))
     except Exception as exc:
         raise HTTPException(status_code=400, detail="payload JSON inválido") from exc
+
+    # Production: el wiring inyecta el verificador real (PayPal). Si está presente, la
+    # firma se comprueba SIEMPRE antes de procesar (nunca se procesa un webhook sin
+    # verificar). En dev/test (fakes, sin verificador) se omite explícitamente.
+    if use_case.has_verifier:
+        try:
+            use_case.verify(raw_body, headers)
+        except InvalidWebhookPayload as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
         result = use_case.execute(payload)

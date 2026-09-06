@@ -31,7 +31,8 @@ dev = [
 ]
 
 [project.scripts]
-osap-support-api = "api.main:run"
+osap-support-web = "api.main:run"
+osap-support-worker = "infrastructure.worker:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["domain", "application", "infrastructure", "api"]

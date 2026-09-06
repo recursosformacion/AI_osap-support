@@ -95,8 +95,15 @@ class PaymentProvider(ABC):
         amount_minor: int,
         currency: str,
         return_url: str,
+        level: str | None = None,
+        periodicity: str | None = None,
     ) -> CheckoutSession:
-        """Crea una sesión de checkout (membership recurrente o donation puntual)."""
+        """Crea una sesión de checkout (membership recurrente o donation puntual).
+
+        - DONATION: `amount_minor`+`currency` obligatorios; level/periodicity se ignoran.
+        - MEMBERSHIP: `level`+`periodicity` obligatorios; el importe/plan lo resuelve el
+          proveedor desde configuración interna (nunca llega del navegador).
+        """
 
     @abstractmethod
     def resolve_customer(self, *, user_id: str) -> str:

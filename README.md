@@ -1,32 +1,67 @@
 # OSAP Support — servicio independiente de apoyo del ecosistema
 
-**Fase 1 — esqueleto del servicio.** Stack de referencia (ADR-011): FastAPI + uvicorn +
-Pydantic v2 + pydantic-settings + MySQL + Alembic + PyJWT + httpx (dev: pytest-asyncio + ruff + mypy).
+Servicio real de soporte económico de OSAP: identidad por JWKS de osap-auth, pagos por
+**PayPal** (donaciones puntuales y membresías recurrentes), emails por SMTP vía worker,
+BD propia `osap_support`, configuración por variables de entorno (`OSAP_SUPPORT_*`).
 
-## ADR aplicados (ver `docs/../support-decisions.md`)
+Es un servicio **independiente** del resto de OSAP: no lee `osap.toml`/`osap.production.toml`
+de osap-api; puede desplegarse en otra máquina con su propia configuración externa
+(la BD usa el mismo usuario/credenciales del ecosistema).
 
-- ADR-001 — Support es propietario de la relación de apoyo (no de identidad ni datos de pago).
-- ADR-002 — Identidad canónica `JWT.sub == Auth.user_id`; sin usuarios locales.
-- ADR-003 — BD propia `osap_support` (config por entorno, Alembic).
-- ADR-011 — Stack del servicio pequeño de referencia (osap-auth), Python ≥ 3.12.
+## Documentación
 
-## Estructura (hexagonal, como osap-auth)
+- [`docs/architecture.md`](docs/architecture.md) — recorridos reales (identity, donation,
+  membership, webhook, worker).
+- [`docs/configuration.md`](docs/configuration.md) — variables de entorno (env), separadas
+  por entorno, y regla de fail-fast.
+- [`docs/deployment.md`](docs/deployment.md) — receta: BD → Alembic → procesos web/worker
+  → Apache → webhook.
+- [`docs/paypal.md`](docs/paypal.md) — sandbox/live, planes, webhook y verificación.
+- [`docs/email.md`](docs/email.md) — SMTP y plantillas.
+
+Material de despliegue en [`deploy/`](deploy/): `env.example`, units systemd (web y
+worker) y `osap-support-vhost.conf` (Apache, patrón osap-app).
+
+## Stack
+
+FastAPI + uvicorn + Pydantic v2 + pydantic-settings + MySQL/MariaDB + Alembic +
+SQLAlchemy 2 + PyJWT + httpx (dev: pytest + ruff + mypy).
+
+## Estructura (hexagonal)
 
 ```
-domain/ports/         ports estables: IdentityResolver (ADR-002), PaymentProvider (ADR-005), EmailSender (ADR-006)
-application/use_cases caso de uso mínimo: ResolveMyUserIdUseCase (ADR-002)
+domain/ports/          IdentityResolver (ADR-002), PaymentProvider (ADR-005), EmailSender (ADR-006)
+domain/entities.py     SupportMember, Membership, Donation, PaymentEvent, CommunicationEvent
+application/use_cases  get_my_membership, checkout_donation, checkout_membership,
+                       process_payment_webhook, process_communication_events
 infrastructure/
-  config.py           Settings/database/identity (OSAP_SUPPORT_*)
-  db/alembic/         migraciones (base; sin tablas de negocio en esta fase)
-  identity/           StaticIdentityResolver (dev/tests; JWKS real queda abierto)
-api/main.py           app FastAPI mínima (solo liveness; sin endpoints de negocio)
-config.example.yaml
-tests/                pruebas de config, imports, identidad, aislamiento
+  config.py            Settings (OSAP_SUPPORT_*): server/db/identity/payment/smtp
+  db/alembic/          0001_create_support_tables
+  identity/            Static (dev/test) + JwksIdentityResolver (production)
+  payment/             Fake (dev/test) + PayPalPaymentProvider
+  email/               Fake (dev/test) + SmtpEmailSender
+  worker.py            proceso worker (bucle / --once)
+api/main.py            app FastAPI: /health, /ready, membership/me, checkouts, webhook
+deploy/                env.example, systemd (web/worker), Apache vhost
+tests/                 99 tests (suite verde)
 ```
 
-## Límites
+## Verificaciones
 
-- **No** creados en esta fase: proveedor de pagos/email, endpoints de negocio, tablas de
-  Memberships/Donations/PaymentEvents, extracción física de Chorus, Social.
-- Decisiones **ABIERTAS** (no decididas): proveedor concreto, hosting/Docker, frecuencia de
-  scheduler, JWKS real, `SupportApiClient`, comunidad, niveles/recompensas, panel admin.
+```bash
+python -m ruff check api infrastructure application domain tests
+python -m mypy api infrastructure application domain   # salvo stub preexistente de yaml
+python -m pytest tests -q
+```
+
+## Recorrido mínimo
+
+```text
+usuario (osap-auth JWT)
+→ osap-support (JWKS)
+→ POST /api/v1/checkouts/donation|membership
+→ PayPal approval URL
+→ PayPal webhook (firma verificada)
+→ persistencia
+→ CommunicationEvent → worker → SMTP
+```

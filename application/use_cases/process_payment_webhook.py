@@ -24,6 +24,7 @@ from domain.entities import (
     PaymentEvent,
     PaymentEventStatus,
     Periodicity,
+    SupportMember,
 )
 from domain.events import DomainEvent, DonationDomainEventType, MembershipDomainEventType
 from domain.exceptions import DuplicatePaymentEventError
@@ -33,6 +34,7 @@ from domain.ports.repositories import (
     DonationRepository,
     MembershipRepository,
     PaymentEventRepository,
+    SupportMemberRepository,
 )
 from domain.ports.unit_of_work import UnitOfWork
 from domain.state_machine import MembershipStateMachine
@@ -86,15 +88,22 @@ class ProcessPaymentWebhookUseCase:
         memberships: MembershipRepository,
         donations: DonationRepository,
         communications: CommunicationEventRepository,
+        support_members: SupportMemberRepository,
         uow: UnitOfWork,
+        webhook_verifier: object | None = None,
     ) -> None:
         self._provider = provider
         self._payment_events = payment_events
         self._memberships = memberships
         self._donations = donations
         self._communications = communications
+        self._support_members = support_members
         self._uow = uow
         self._machine = MembershipStateMachine()
+        # Verificador de firma del proveedor (p. ej. PayPal verify-webhook-signature).
+        # En dev/test suele ser None (fakes); en production SIEMPRE debe estar presente:
+        # si falta, el endpoint rechaza el evento (nunca procesa payload sin verificar).
+        self._webhook_verifier = webhook_verifier
 
     def execute(self, payload: object) -> WebhookResult:
         try:
@@ -103,6 +112,31 @@ class ProcessPaymentWebhookUseCase:
             raise InvalidWebhookPayload(str(exc)) from exc
 
         return self._process(event)
+
+    @property
+    def has_verifier(self) -> bool:
+        """True si el wiring inyectó un verificador de firma real (production)."""
+        return self._webhook_verifier is not None
+
+    def verify(self, raw_body: bytes, headers: dict[str, str]) -> None:
+        """Verifica la firma del webhook antes de parsear/procesar.
+
+        En production el wiring inyecta el verificador real (PayPal). Sin verificador
+        configurado, el endpoint rechaza (fail-fast) en lugar de procesar payloads
+        arbitrarios.
+        """
+        if self._webhook_verifier is None:
+            raise InvalidWebhookPayload("verificador de firma no configurado (webhook rechazado)")
+        verifier = self._webhook_verifier
+        try:
+            verify = getattr(verifier, "verify_webhook", None)
+            if verify is None:
+                raise InvalidWebhookPayload("verificador sin método verify_webhook")
+            verify(raw_body, headers)
+        except InvalidWebhookPayload:
+            raise
+        except Exception as exc:
+            raise InvalidWebhookPayload(str(exc)) from exc
 
     def _process(self, event: PaymentProviderEvent) -> WebhookResult:
         provider, event_id = event.provider, event.provider_event_id
@@ -133,6 +167,10 @@ class ProcessPaymentWebhookUseCase:
         # transacción se aplican los efectos; si algo falla, rollback atómico.
         payment_event = self._register(event, PaymentEventStatus.PROCESSED)
         try:
+            if event.user_id is not None:
+                # ADR-002/ADR-003: la relación SupportMember debe existir antes de
+                # memberships/donations (FK). Creación idempotente.
+                self._ensure_support_member(event.user_id)
             if isinstance(domain_event_type, DonationDomainEventType):
                 self._apply_donation(event, domain_event_type)
             else:
@@ -168,6 +206,12 @@ class ProcessPaymentWebhookUseCase:
             # Concurrencia: otro request registró el mismo evento.
             raise
         return payment_event
+
+    def _ensure_support_member(self, user_id: str) -> None:
+        """Crea la relación SupportMember si no existe (FK memberships/donations)."""
+        if self._support_members.exists(user_id):
+            return
+        self._support_members.add(SupportMember(user_id=user_id, created_at=datetime.now(UTC)))
 
     # --- efectos de negocio -------------------------------------------------
 

@@ -1,0 +1,24 @@
+# OSAP Support — unit systemd para el proceso WORKER (emails).
+# Proceso separado e independiente del web (ADR-006). Copiar a
+# /etc/systemd/system/osap-support-worker.service.
+
+[Unit]
+Description=OSAP Support Worker (communication events)
+After=network.target mysql.service
+Wants=osap-support-web.service
+
+[Service]
+Type=simple
+User=osap
+Group=osap
+WorkingDirectory=/opt/osap-support
+EnvironmentFile=/etc/osap-support/env
+ExecStart=/opt/osap-support/.venv/bin/osap-support-worker
+Restart=always
+RestartSec=5
+
+# Verificación manual de una pasada (sin bucle):
+#   /opt/osap-support/.venv/bin/osap-support-worker --once
+
+[Install]
+WantedBy=multi-user.target

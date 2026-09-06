@@ -22,12 +22,12 @@ def test_fake_implements_payment_provider_contract() -> None:
     provider = _fake()
     session = provider.create_checkout(
         user_id="uuid-1",
-        mode=PaymentMode.MEMBERSHIP,
+        mode=PaymentMode.DONATION,
         amount_minor=1000,
         currency="EUR",
         return_url="https://osap-app/return",
     )
-    assert session.mode == PaymentMode.MEMBERSHIP
+    assert session.mode == PaymentMode.DONATION
     assert session.checkout_url.startswith("https://fake-pay/")
     assert session.money.amount_minor == 1000
     assert session.money.currency == "EUR"
@@ -39,26 +39,31 @@ def test_application_depends_on_port_not_provider() -> None:
     use_case = CheckoutMembershipUseCase(provider)
     session = use_case.execute(
         user_id="uuid-1",
-        amount_minor=500,
-        currency="EUR",
+        level="supporter",
+        periodicity="monthly",
         return_url="https://osap-app/return",
     )
     assert session.mode == PaymentMode.MEMBERSHIP
-    assert session.amount_minor == 500
+    assert session.checkout_url.startswith("https://fake-pay/")
+
+    donation = CheckoutDonationUseCase(provider).execute(
+        user_id="uuid-1", amount_minor=500, currency="EUR", return_url="/return"
+    )
+    assert donation.amount_minor == 500
 
 
 def test_membership_and_donation_checkouts_are_distinct() -> None:
     # ADR-004: membership (recurrente) y donation (puntual) usan modos distintos.
     provider = _fake()
     membership = CheckoutMembershipUseCase(provider).execute(
-        user_id="uuid-1", amount_minor=1000, currency="EUR", return_url="/return"
+        user_id="uuid-1", level="contributor", periodicity="yearly", return_url="/return"
     )
     donation = CheckoutDonationUseCase(provider).execute(
         user_id="uuid-1", amount_minor=500, currency="EUR", return_url="/return"
     )
     assert membership.mode == PaymentMode.MEMBERSHIP
     assert donation.mode == PaymentMode.DONATION
-    assert membership.amount_minor != donation.amount_minor
+    assert "/contributor/yearly" in membership.checkout_url
 
 
 def test_resolve_customer_is_stable() -> None:
