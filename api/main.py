@@ -9,6 +9,8 @@ funcional detrás de un fake.
 
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI
 
 from api.routes.admin_recognitions import wire_admin_recognitions_router
@@ -121,6 +123,15 @@ def _service_authenticator_for(settings: Settings) -> ServiceAuthenticator:
 
 def _payment_for(settings: Settings) -> PaymentProvider:
     if settings.server.env in _NON_PRODUCTION:
+        # Dev/test: PayPal Sandbox real SOLO con opt-in explícito
+        # OSAP_SUPPORT_PAYPAL_DEV_REAL=1 (E2E local). Por defecto: fake (tests/suite).
+        force_real = os.environ.get("OSAP_SUPPORT_PAYPAL_DEV_REAL", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        if force_real and _sandbox_configured(settings):
+            return _paypal_provider(settings)
         return FakePaymentProvider()
     # production: SOLO PayPal real. Sin credenciales/configuración el arranque falla.
     pcfg = settings.payment
@@ -129,20 +140,34 @@ def _payment_for(settings: Settings) -> PaymentProvider:
             "Production payment provider is not configured: "
             "OSAP_SUPPORT_PAYPAL_MODE/CLIENT_ID/CLIENT_SECRET required (PayPal)"
         )
-    from infrastructure.payment.paypal_payment_provider import PayPalPaymentProvider
-
-    plan_ids = pcfg.plan_ids()
-    if not any(plan_ids.values()):
+    if not any(pcfg.plan_ids().values()):
         raise ProductionWiringError(
             "Production payment provider is missing PayPal plan_ids: "
             "OSAP_SUPPORT_PAYPAL_PLAN_*_MONTHLY/YEARLY required"
         )
+    return _paypal_provider(settings)
+
+
+def _sandbox_configured(settings: Settings) -> bool:
+    pcfg = settings.payment
+    return (
+        pcfg.mode in ("sandbox", "live")
+        and bool(pcfg.client_id)
+        and bool(pcfg.client_secret)
+        and any(pcfg.plan_ids().values())
+    )
+
+
+def _paypal_provider(settings: Settings) -> PaymentProvider:
+    from infrastructure.payment.paypal_payment_provider import PayPalPaymentProvider
+
+    pcfg = settings.payment
     return PayPalPaymentProvider(
         mode=pcfg.mode,
         client_id=pcfg.client_id,
         client_secret=pcfg.client_secret,
         webhook_id=pcfg.webhook_id,
-        plan_ids=plan_ids,
+        plan_ids=pcfg.plan_ids(),
     )
 
 

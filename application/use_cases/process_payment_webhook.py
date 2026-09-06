@@ -282,12 +282,15 @@ class ProcessPaymentWebhookUseCase:
         # plan real está configurado).
         periodicity = Periodicity(_s(meta.get("periodicity")) or "monthly")
         level = MembershipLevel(_s(meta.get("level")) or "supporter")
-        started = _parse_iso(_s(meta.get("start_time")))
+        started = _parse_iso(_s(meta.get("start_time"))) or event.received_at
         next_at = _parse_iso(_s(meta.get("next_billing_time")))
+        # PayPal BILLING.SUBSCRIPTION.ACTIVATED = suscripción YA activa (aprobada):
+        # se crea la membership en ACTIVE con las fechas reales, no en PENDING a la
+        # espera de un cobro (validado con el payload real de Sandbox, 2026-09-06).
         membership = Membership(
             id=None,
             user_id=event.user_id or "",
-            status=MembershipStatus.PENDING,
+            status=MembershipStatus.ACTIVE,
             level=level,
             periodicity=periodicity,
             amount_minor=amount_minor,
