@@ -2,14 +2,13 @@
 
 Conexión FastAPI → caso de uso → ports → infraestructura (Fase 5).
 La identidad se deriva del token (ADR-008/ADR-002). JWKS productivo queda ABIERTO;
-en dev/test se usa StaticIdentityResolver. En production el arranque FALLA si no hay
+en dev/test se usa DevIdentityResolver (acepta el token real sin validar, con
+fallback al token estático). En production el arranque FALLA si no hay
 implementaciones reales: es preferible que el servicio no arranque a que parezca
 funcional detrás de un fake.
 """
 
 from __future__ import annotations
-
-import os
 
 from fastapi import FastAPI
 
@@ -62,9 +61,9 @@ from infrastructure.db.repositories.support_member_repository import (
 )
 from infrastructure.db.session import make_session_factory
 from infrastructure.db.unit_of_work import SqlAlchemyUnitOfWork
+from infrastructure.identity.dev_identity_resolver import DevIdentityResolver
 from infrastructure.identity.jwks_identity_resolver import JwksIdentityResolver
 from infrastructure.identity.jwks_service_authenticator import JwksServiceAuthenticator
-from infrastructure.identity.static_identity_resolver import StaticIdentityResolver
 from infrastructure.identity.static_service_authenticator import (
     StaticServiceAuthenticator,
 )
@@ -80,9 +79,11 @@ class ProductionWiringError(RuntimeError):
 
 def _identity_for(settings: Settings) -> IdentityResolver:
     if settings.server.env in _NON_PRODUCTION:
-        return StaticIdentityResolver(
-            token=settings.server.dev_token,
-            user_id=settings.server.dev_user_id,
+        # Dev: acepta el token REAL del usuario (JWT sin verificar, igual que el bypass de
+        # osap-api) para poder probar /support autenticado; fallback al dev-token estático.
+        return DevIdentityResolver(
+            dev_token=settings.server.dev_token,
+            dev_user_id=settings.server.dev_user_id,
         )
     # production: SOLO un resolver real contra el JWKS de osap-auth. Si la integración
     # no está configurada (jwks_uri/issuer/audience), el arranque FALLA explícitamente.
@@ -116,21 +117,17 @@ def _service_authenticator_for(settings: Settings) -> ServiceAuthenticator:
     return JwksServiceAuthenticator(
         jwks_uri=identity_cfg.jwks_uri,
         issuer=identity_cfg.issuer,
-        audience=identity_cfg.audience,
+        audience=identity_cfg.service_audience or identity_cfg.audience,
         cache_ttl_seconds=identity_cfg.jwks_cache_ttl_seconds,
     )
 
 
 def _payment_for(settings: Settings) -> PaymentProvider:
+    pcfg = settings.payment
     if settings.server.env in _NON_PRODUCTION:
-        # Dev/test: PayPal Sandbox real SOLO con opt-in explícito
-        # OSAP_SUPPORT_PAYPAL_DEV_REAL=1 (E2E local). Por defecto: fake (tests/suite).
-        force_real = os.environ.get("OSAP_SUPPORT_PAYPAL_DEV_REAL", "").strip().lower() in {
-            "1",
-            "true",
-            "yes",
-        }
-        if force_real and _sandbox_configured(settings):
+        # Dev/test: PayPal Sandbox real SOLO con opt-in explícito `[paypal] dev_real`
+        # (o env OSAP_SUPPORT_PAYPAL_DEV_REAL=1, p. ej. E2E local). Por defecto: fake.
+        if pcfg.dev_real and _sandbox_configured(settings):
             return _paypal_provider(settings)
         return FakePaymentProvider()
     # production: SOLO PayPal real. Sin credenciales/configuración el arranque falla.

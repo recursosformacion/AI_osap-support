@@ -62,6 +62,7 @@ class IdentityConfig(BaseSettings):
     jwks_uri: str = ""
     issuer: str = ""
     audience: str = "osap-support"
+    service_audience: str = ""  # service tokens M2M (si vacío: same as audience)
     service_client_id: str = ""
     service_client_secret: str = ""
     jwks_cache_ttl_seconds: int = 300
@@ -93,6 +94,9 @@ class PaymentConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="OSAP_SUPPORT_PAYPAL_", extra="ignore")
 
     mode: str = ""  # sandbox | live (vacío = no configurado)
+    # Opt-in de desarrollo: en entornos no productivos, usar PayPal REAL (sandbox)
+    # en lugar del FakePaymentProvider. Por defecto False (fake en dev/test).
+    dev_real: bool = False
     client_id: str = ""
     client_secret: str = ""
     webhook_id: str = ""
@@ -201,6 +205,7 @@ _TOML_TO_ENV: dict[str, list[tuple[str, str, Any]]] = {
     ],
     "paypal": [
         ("mode", "OSAP_SUPPORT_PAYPAL_MODE", str),
+        ("dev_real", "OSAP_SUPPORT_PAYPAL_DEV_REAL", bool),
         ("client_id", "OSAP_SUPPORT_PAYPAL_CLIENT_ID", str),
         ("client_secret", "OSAP_SUPPORT_PAYPAL_CLIENT_SECRET", str),
         ("webhook_id", "OSAP_SUPPORT_PAYPAL_WEBHOOK_ID", str),

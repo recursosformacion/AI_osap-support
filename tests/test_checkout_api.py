@@ -24,6 +24,9 @@ def _settings() -> Settings:
     s = Settings(env="test")
     s.server.dev_token = "dev-token"
     s.server.dev_user_id = USER
+    # Aislado: aunque el osap.toml local tenga `[paypal] dev_real=true`, estos tests
+    # verifican el contrato HTTP contra el FakePaymentProvider (sin red ni sandbox).
+    s.payment.dev_real = False
     return s
 
 

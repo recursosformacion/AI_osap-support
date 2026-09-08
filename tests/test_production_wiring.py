@@ -12,8 +12,8 @@ import pytest
 
 from api.main import ProductionWiringError, _identity_for, _payment_for
 from infrastructure.config import PROJECT_ROOT, Settings
+from infrastructure.identity.dev_identity_resolver import DevIdentityResolver
 from infrastructure.identity.jwks_identity_resolver import JwksIdentityResolver
-from infrastructure.identity.static_identity_resolver import StaticIdentityResolver
 from infrastructure.payment.fake_payment_provider import FakePaymentProvider
 from infrastructure.payment.paypal_payment_provider import PayPalPaymentProvider
 
@@ -123,17 +123,27 @@ class TestSettingsDependOnOsapToml:
 class TestDevAndTestUseFakes:
     def test_development_uses_static_identity(self) -> None:
         identity = _identity_for(_settings("development"))
-        assert isinstance(identity, StaticIdentityResolver)
+        assert isinstance(identity, DevIdentityResolver)
         assert identity.resolve_user_id("Bearer dev-token") == "dev-user"
 
     def test_test_uses_static_identity(self) -> None:
         identity = _identity_for(_settings("test"))
-        assert isinstance(identity, StaticIdentityResolver)
+        assert isinstance(identity, DevIdentityResolver)
 
-    def test_development_uses_fake_payment(self) -> None:
-        provider = _payment_for(_settings("development"))
+    def test_development_uses_fake_payment_by_default(self) -> None:
+        provider = _payment_for(_settings_without_toml("development"))
         assert isinstance(provider, FakePaymentProvider)
 
+    def test_development_uses_paypal_when_dev_real(self) -> None:
+        s = _settings_without_toml("development")
+        s.payment.mode = "sandbox"
+        s.payment.client_id = "cid"
+        s.payment.client_secret = "csec"
+        s.payment.plan_supporter_monthly = "P-MONTHLY-1"
+        s.payment.dev_real = True
+        provider = _payment_for(s)
+        assert isinstance(provider, PayPalPaymentProvider)
+
     def test_test_uses_fake_payment(self) -> None:
-        provider = _payment_for(_settings("test"))
+        provider = _payment_for(_settings_without_toml("test"))
         assert isinstance(provider, FakePaymentProvider)
