@@ -7,6 +7,7 @@ El dominio NO conoce SQLAlchemy/MySQL (regla de separación hexagonal).
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 from domain.entities import (
     CommunicationEvent,
@@ -14,7 +15,10 @@ from domain.entities import (
     ContributionType,
     Donation,
     Membership,
+    MembershipLevel,
+    MembershipStatus,
     PaymentEvent,
+    Periodicity,
     Project,
     Recognition,
     RecognitionEvent,
@@ -54,6 +58,38 @@ class DonationRepository(ABC):
 
     @abstractmethod
     def list_by_user(self, user_id: str) -> list[Donation]: ...
+
+
+class PaymentsAdminRepository(ABC):
+    """Consultas de listado administrativo de pagos (pantalla financiera, support:admin).
+
+    Cubre `memberships` (suscripciones) y `donations` (aportaciones puntuales). Cada
+    método devuelve `(total, filas de la página)` y deja los filtros, el orden y la
+    paginación a la implementación SQL: nunca se pagan listas completas en memoria.
+    """
+
+    @abstractmethod
+    def list_memberships_page(
+        self,
+        *,
+        user_id: str | None = None,
+        status: MembershipStatus | None = None,
+        level: MembershipLevel | None = None,
+        periodicity: Periodicity | None = None,
+        limit: int,
+        offset: int,
+    ) -> tuple[int, list[Membership]]: ...
+
+    @abstractmethod
+    def list_donations_page(
+        self,
+        *,
+        user_id: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        limit: int,
+        offset: int,
+    ) -> tuple[int, list[Donation]]: ...
 
 
 class PaymentEventRepository(ABC):

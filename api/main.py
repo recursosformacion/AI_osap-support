@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
+from api.routes.admin_payments import wire_admin_payments_router
 from api.routes.admin_recognitions import wire_admin_recognitions_router
 from api.routes.checkout import wire_checkout_router
 from api.routes.m2m_contributions import wire_m2m_contributions_router
@@ -19,6 +20,7 @@ from api.routes.membership import wire_router
 from api.routes.public_recognitions import wire_public_recognitions_router
 from api.routes.recognitions import wire_recognitions_router
 from api.routes.webhooks import wire_webhook_router
+from application.use_cases.admin_list_payments import AdminListPaymentsUseCase
 from application.use_cases.admin_list_recognitions import AdminListRecognitionsUseCase
 from application.use_cases.checkout_donation import CheckoutDonationUseCase
 from application.use_cases.checkout_membership import CheckoutMembershipUseCase
@@ -49,6 +51,9 @@ from infrastructure.db.repositories.contribution_repository import (
 from infrastructure.db.repositories.donation_repository import SqlAlchemyDonationRepository
 from infrastructure.db.repositories.membership_repository import SqlAlchemyMembershipRepository
 from infrastructure.db.repositories.payment_event_repository import SqlAlchemyPaymentEventRepository
+from infrastructure.db.repositories.payments_admin_repository import (
+    SqlAlchemyPaymentsAdminRepository,
+)
 from infrastructure.db.repositories.project_repository import SqlAlchemyProjectRepository
 from infrastructure.db.repositories.recognition_event_repository import (
     SqlAlchemyRecognitionEventRepository,
@@ -297,6 +302,13 @@ def create_app(settings: Settings) -> FastAPI:
                 clock=clock,
                 uow=uow,
             ),
+        )
+    )
+    payments_admin = SqlAlchemyPaymentsAdminRepository(session)
+    app.include_router(
+        wire_admin_payments_router(
+            identity=identity,
+            list_uc=AdminListPaymentsUseCase(payments=payments_admin),
         )
     )
     app.include_router(
