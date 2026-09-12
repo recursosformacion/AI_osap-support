@@ -20,7 +20,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
-from infrastructure.config import load_settings  # noqa: E402
 from infrastructure.db.models import (  # noqa: E402
     MembershipModel,
     ProjectModel,
@@ -78,7 +77,6 @@ def main() -> None:
     parser.add_argument("--criterion-id", default="founder-2026")
     args = parser.parse_args()
 
-    settings = load_settings()
     factory = make_session_factory()
     session: Session = factory()
     created = 0
