@@ -10,7 +10,9 @@ funcional detrás de un fake.
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from collections.abc import Awaitable, Callable
+
+from fastapi import FastAPI, Request, Response
 
 from api.routes.admin_payments import wire_admin_payments_router
 from api.routes.admin_recognitions import wire_admin_recognitions_router
@@ -191,6 +193,33 @@ def create_app(settings: Settings) -> FastAPI:
     # Wiring (Fase 5/6): FastAPI → use case → ports → infraestructura.
     session = make_session_factory()()
     app.state.db_session = session
+
+    # La sesión es única para toda la app (la comparten todos los repositorios/UoW). Si una
+    # petición falla a mitad de transacción, SQLAlchemy la deja inválida y TODAS las
+    # siguientes devuelven `PendingRollbackError` → 502 (visto en /checkouts/donation).
+    # Este guardián revierte antes de cada petición y ante cualquier excepción, de modo que
+    # la sesión siempre parte limpia y una petición rota no tumba el servicio.
+    @app.middleware("http")
+    async def _db_session_guard(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        try:
+            if session.in_transaction() or session.in_nested_transaction():
+                session.rollback()
+        except Exception:  # noqa: BLE001
+            try:
+                session.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            return await call_next(request)
+        except Exception:
+            try:
+                session.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+            raise
+
     identity = _identity_for(settings)
 
     @app.get("/")
