@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -96,6 +97,7 @@ class PayPalPaymentProvider(BasePaymentProvider):
         self._base = _API_BASE[mode]
         self._http = http_client or httpx.Client(timeout=20.0)
         self._access_token: str | None = None
+        self._token_expires_at: float = 0.0
         # Inversa plan_id → (level, periodicity): el webhook solo trae plan_id y el
         # binding no debe quedarse en supporter/monthly por defecto.
         self._plan_level_periodicity: dict[str, tuple[str, str]] = {
@@ -109,7 +111,8 @@ class PayPalPaymentProvider(BasePaymentProvider):
     # -- internals ------------------------------------------------------------
 
     def _token(self) -> str:
-        if self._access_token:
+        now = time.monotonic()
+        if self._access_token and now < self._token_expires_at - 60:
             return self._access_token
         resp = self._http.post(
             f"{self._base}/v1/oauth2/token",
@@ -119,10 +122,27 @@ class PayPalPaymentProvider(BasePaymentProvider):
         )
         if resp.status_code != 200:
             raise PayPalError(f"oauth token falló ({resp.status_code}): {resp.text[:200]}")
-        self._access_token = str(resp.json().get("access_token") or "")
+        payload = resp.json()
+        self._access_token = str(payload.get("access_token") or "")
+        try:
+            expires_in = int(payload.get("expires_in") or 0)
+        except (TypeError, ValueError):
+            expires_in = 0
+        # Los tokens de PayPal duran ~9 h: si no se caducan aquí, el proceso sirve un token
+        # inválido durante días y PayPal responde 401 "Access Token not found in cache".
+        self._token_expires_at = now + (expires_in if expires_in > 0 else 300)
         if not self._access_token:
             raise PayPalError("PayPal no devolvió access_token")
         return self._access_token
+
+    def _post(self, path: str, body: dict[str, Any]) -> httpx.Response:
+        """POST autenticado con reintento único si PayPal invalida el token cacheado."""
+        resp = self._http.post(f"{self._base}{path}", json=body, headers=self._headers())
+        if resp.status_code == 401:
+            self._access_token = None
+            self._token_expires_at = 0.0
+            resp = self._http.post(f"{self._base}{path}", json=body, headers=self._headers())
+        return resp
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -240,11 +260,7 @@ class PayPalPaymentProvider(BasePaymentProvider):
             "webhook_id": self._webhook_id,
             "webhook_event": json.loads(body_text),
         }
-        resp = self._http.post(
-            f"{self._base}/v1/notifications/verify-webhook-signature",
-            json=verify_payload,
-            headers=self._headers(),
-        )
+        resp = self._post("/v1/notifications/verify-webhook-signature", verify_payload)
         if resp.status_code != 200:
             raise PayPalError(f"verificación de webhook falló ({resp.status_code})")
         if resp.json().get("verification_status") != "SUCCESS":
@@ -271,11 +287,7 @@ class PayPalPaymentProvider(BasePaymentProvider):
                 "user_action": "PAY_NOW",
             },
         }
-        resp = self._http.post(
-            f"{self._base}/v2/checkout/orders",
-            json=body,
-            headers=self._headers(),
-        )
+        resp = self._post("/v2/checkout/orders", body)
         if resp.status_code not in (200, 201):
             raise PayPalError(f"crear order falló ({resp.status_code}): {resp.text[:300]}")
         data = resp.json()
@@ -315,11 +327,7 @@ class PayPalPaymentProvider(BasePaymentProvider):
                 "user_action": "SUBSCRIBE_NOW",
             },
         }
-        resp = self._http.post(
-            f"{self._base}/v1/billing/subscriptions",
-            json=body,
-            headers=self._headers(),
-        )
+        resp = self._post("/v1/billing/subscriptions", body)
         if resp.status_code not in (200, 201):
             raise PayPalError(f"crear subscription falló ({resp.status_code}): {resp.text[:300]}")
         data = resp.json()
