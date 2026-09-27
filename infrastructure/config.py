@@ -199,6 +199,7 @@ _TOML_TO_ENV: dict[str, list[tuple[str, str, Any]]] = {
         ("jwks_uri", "OSAP_SUPPORT_AUTH_JWKS_URI", str),
         ("issuer", "OSAP_SUPPORT_AUTH_ISSUER", str),
         ("audience", "OSAP_SUPPORT_AUTH_AUDIENCE", str),
+        ("service_audience", "OSAP_SUPPORT_AUTH_SERVICE_AUDIENCE", str),
         ("service_client_id", "OSAP_SUPPORT_AUTH_SERVICE_CLIENT_ID", str),
         ("service_client_secret", "OSAP_SUPPORT_AUTH_SERVICE_CLIENT_SECRET", str),
         ("jwks_cache_ttl_seconds", "OSAP_SUPPORT_AUTH_JWKS_CACHE_TTL_SECONDS", int),
