@@ -18,6 +18,7 @@ from api.routes.admin_payments import wire_admin_payments_router
 from api.routes.admin_recognitions import wire_admin_recognitions_router
 from api.routes.checkout import wire_checkout_router
 from api.routes.m2m_contributions import wire_m2m_contributions_router
+from api.routes.m2m_membership import wire_m2m_membership_router
 from api.routes.membership import wire_router
 from api.routes.public_recognitions import wire_public_recognitions_router
 from api.routes.recognitions import wire_recognitions_router
@@ -27,6 +28,7 @@ from application.use_cases.admin_list_recognitions import AdminListRecognitionsU
 from application.use_cases.checkout_donation import CheckoutDonationUseCase
 from application.use_cases.checkout_membership import CheckoutMembershipUseCase
 from application.use_cases.evaluate_contributor import EvaluateContributorRecognitionUseCase
+from application.use_cases.get_membership_for_user import GetMembershipForUserUseCase
 from application.use_cases.get_my_membership import GetMyMembershipUseCase
 from application.use_cases.get_public_recognitions import GetPublicRecognitionsUseCase
 from application.use_cases.grant_recognition import GrantRecognitionUseCase
@@ -351,6 +353,15 @@ def create_app(settings: Settings) -> FastAPI:
                 contributor_evaluator=contributor_eval,
                 clock=clock,
                 uow=uow,
+            ),
+        )
+    )
+    app.include_router(
+        wire_m2m_membership_router(
+            service_authenticator=_service_authenticator_for(settings),
+            m2m_scope=lambda client_id: m2m_scope_for_settings(settings, client_id),
+            membership_uc=GetMembershipForUserUseCase(
+                memberships=SqlAlchemyMembershipRepository(session)
             ),
         )
     )
