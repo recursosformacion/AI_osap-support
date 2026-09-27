@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "osap-support"
-version = "4.0.0"
+version = "4.1.0"
 description = "Servicio de apoyo/membresía del ecosistema OSAP (relación de apoyo, economía no sensible y comunicaciones)."
 requires-python = ">=3.12"
 dependencies = [
