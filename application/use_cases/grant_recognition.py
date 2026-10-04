@@ -1,9 +1,9 @@
 """Caso de uso: concesión administrativa de un reconocimiento (ADR-015).
 
-Solo CONTRIBUTOR y VOICE son otorgables por administración (kind=GRANTED, granted_by,
-reason obligatorios). SUPPORTER es derivado y FOUNDER histórico por criterio congelado:
-no se conceden manualmente. Si ya existe un reconocimiento para (user, project, type),
-se rechaza (RecognitionConflictError).
+SUPPORTER **no** se concede manualmente: deriva de una transacción económica (PayPal) y solo
+se materializa por esa vía. CONTRIBUTOR, VOICE y FOUNDER sí los otorga el administrador
+(kind=GRANTED, con `granted_by` y `reason` obligatorios de auditoría). Si ya existe un
+reconocimiento para (user, project, type), se rechaza (RecognitionConflictError).
 """
 
 from __future__ import annotations
@@ -33,7 +33,11 @@ from domain.ports.repositories import (
 )
 from domain.ports.unit_of_work import UnitOfWork
 
-_MANUAL_GRANTABLE = {RecognitionType.CONTRIBUTOR, RecognitionType.VOICE}
+_MANUAL_GRANTABLE = {
+    RecognitionType.CONTRIBUTOR,
+    RecognitionType.VOICE,
+    RecognitionType.FOUNDER,
+}
 
 
 @dataclass(frozen=True)
@@ -73,7 +77,8 @@ class GrantRecognitionUseCase:
     ) -> GrantResult:
         if recognition_type not in _MANUAL_GRANTABLE:
             raise InvalidGrantError(
-                "solo CONTRIBUTOR y VOICE son otorgables manualmente (ADR-015)"
+                "solo CONTRIBUTOR, VOICE y FOUNDER son otorgables manualmente; "
+                "SUPPORTER deriva de una transacción económica (ADR-015)"
             )
         if not granted_by or not granted_by.strip():
             raise InvalidGrantError("granted_by es obligatorio")

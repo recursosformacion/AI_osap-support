@@ -168,6 +168,23 @@ class RecognitionRepository(ABC):
         """Reconocimientos públicamente visibles de un tercero (lectura consentida,
         ADR-015): SOLO status=ACTIVE y public=true. Sin consentimiento no existen."""
 
+    @abstractmethod
+    def list_public_by_project(self, project_slug: str) -> list[Recognition]:
+        """Reconocimientos públicamente visibles de un proyecto (ADR-015): SOLO
+        status=ACTIVE y public=true, de todos los usuarios del proyecto.
+
+        DEPRECADO: la visibilidad pública ya no depende de `public` (autorización de cuenta
+        `nickname_public_consent` en osap-auth). Se conserva sin migración destructiva para
+        la surface pública antigua; la lectura vigente para osap-api es
+        `list_active_by_project`."""
+
+    @abstractmethod
+    def list_active_by_project(self, project_slug: str) -> list[Recognition]:
+        """Reconocimientos VIGENTES de un proyecto (lectura M2M interna, ADR-017): SOLO
+        status=ACTIVE, sin filtro `public`. La visibilidad pública ya no la decide la fila
+        (autorización de cuenta `nickname_public_consent` en osap-auth): osap-api compone la
+        lista pública y filtra por consentimiento."""
+
 
 class RecognitionEventRepository(ABC):
     """Historial inmutable de cambios de reconocimiento (ADR-016)."""

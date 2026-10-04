@@ -351,9 +351,10 @@ def test_grant_voice_by_admin() -> None:
     assert rec.status is RecognitionStatus.ACTIVE
 
 
-def test_grant_rejects_supporter_founder_and_invalid_inputs() -> None:
+def test_grant_rejects_supporter_and_invalid_inputs() -> None:
     h = Harness()
     grant = h.grant_uc()
+    # SUPPORTER deriva de una transacción económica: no es otorgable manualmente.
     with pytest.raises(InvalidGrantError):
         grant.execute(
             user_id="u-2",

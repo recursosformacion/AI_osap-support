@@ -90,6 +90,42 @@ class SqlAlchemyRecognitionRepository(RecognitionRepository):
         models = self._session.execute(stmt).scalars().all()
         return [self._to_domain(m) for m in models]
 
+    def list_public_by_project(self, project_slug: str) -> list[Recognition]:
+        """Lectura pública consentida de un proyecto (ADR-015): SOLO ACTIVE y public=true.
+
+        DEPRECADO: la visibilidad pública pasó a ser autorización de cuenta
+        (`nickname_public_consent`, osap-auth). La lectura vigente para osap-api es
+        `list_active_by_project`."""
+        stmt = (
+            select(RecognitionModel)
+            .join(ProjectModel, RecognitionModel.project_id == ProjectModel.id)
+            .where(
+                ProjectModel.slug == project_slug,
+                RecognitionModel.status == RecognitionStatus.ACTIVE.value,
+                RecognitionModel.public.is_(True),
+            )
+            .order_by(RecognitionModel.id)
+        )
+        models = self._session.execute(stmt).scalars().all()
+        return [self._to_domain(m) for m in models]
+
+    def list_active_by_project(self, project_slug: str) -> list[Recognition]:
+        """Reconocimientos vigentes de un proyecto (lectura M2M interna, ADR-017).
+
+        SOLO status=ACTIVE; sin filtro `public` (la visibilidad pública la decide el
+        consentimiento de cuenta en osap-auth)."""
+        stmt = (
+            select(RecognitionModel)
+            .join(ProjectModel, RecognitionModel.project_id == ProjectModel.id)
+            .where(
+                ProjectModel.slug == project_slug,
+                RecognitionModel.status == RecognitionStatus.ACTIVE.value,
+            )
+            .order_by(RecognitionModel.id)
+        )
+        models = self._session.execute(stmt).scalars().all()
+        return [self._to_domain(m) for m in models]
+
     def _to_model(self, recognition: Recognition) -> RecognitionModel:
         project_id = self._session.execute(
             select(ProjectModel.id).where(ProjectModel.slug == recognition.project_slug)

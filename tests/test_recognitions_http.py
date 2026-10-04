@@ -20,6 +20,7 @@ from sqlalchemy.pool import StaticPool
 
 from api.routes.admin_recognitions import wire_admin_recognitions_router
 from api.routes.m2m_contributions import wire_m2m_contributions_router
+from api.routes.m2m_recognitions import wire_m2m_recognitions_router
 from api.routes.public_recognitions import wire_public_recognitions_router
 from api.routes.recognitions import wire_recognitions_router
 from application.use_cases.admin_list_recognitions import AdminListRecognitionsUseCase
@@ -27,7 +28,13 @@ from application.use_cases.evaluate_contributor import EvaluateContributorRecogn
 from application.use_cases.get_public_recognitions import GetPublicRecognitionsUseCase
 from application.use_cases.grant_recognition import GrantRecognitionUseCase
 from application.use_cases.ingest_contribution import IngestContributionUseCase
+from application.use_cases.list_active_project_recognitions import (
+    ListActiveProjectRecognitionsUseCase,
+)
 from application.use_cases.list_my_recognitions import ListMyRecognitionsUseCase
+from application.use_cases.list_public_project_recognitions import (
+    ListPublicProjectRecognitionsUseCase,
+)
 from application.use_cases.revoke_recognition import RevokeRecognitionUseCase
 from application.use_cases.set_recognition_consent import SetRecognitionConsentUseCase
 from domain.entities import (
@@ -64,6 +71,7 @@ from infrastructure.db.repositories.support_member_repository import (
 )
 from infrastructure.db.unit_of_work import SqlAlchemyUnitOfWork
 from infrastructure.identity.static_identity_resolver import StaticIdentityResolver
+from infrastructure.identity.static_service_authenticator import StaticServiceAuthenticator
 
 USER = "user-A"
 OTHER = "user-B"
@@ -206,12 +214,19 @@ def _make_harness(
             service_token: ("omr-backend", ("support:ingest", "api:read")),
             "no-scope-token": ("omr-backend", ("api:read",)),
             "unknown-service-token": ("ghost", ("support:ingest",)),
+            # Tokens usados por los tests M2M de reconocimientos.
+            "ingest-only-token": ("omr-backend", ("support:ingest",)),
+            "ghost-api-token": ("ghost", ("api:read",)),
+            "wide-token": ("wide", ("api:read",)),
         }
     )
 
     def _m2m_scope(client_id: str) -> M2mClientConfig | None:
         if client_id == "omr-backend":
             return M2mClientConfig(client_id=client_id, source="omr", projects=["omr"])
+        if client_id == "wide":
+            # Proyecto permitido para el client pero no whitelisted en la BD → 404.
+            return M2mClientConfig(client_id=client_id, source="wide", projects=["gp"])
         return None
 
     app = FastAPI(title="osap-support-4d5")
@@ -226,7 +241,8 @@ def _make_harness(
     )
     app.include_router(
         wire_public_recognitions_router(
-            GetPublicRecognitionsUseCase(recognitions=recognitions, projects=projects)
+            GetPublicRecognitionsUseCase(recognitions=recognitions, projects=projects),
+            ListPublicProjectRecognitionsUseCase(recognitions=recognitions, projects=projects),
         )
     )
     contributor_eval = EvaluateContributorRecognitionUseCase(
@@ -242,6 +258,9 @@ def _make_harness(
     app.include_router(
         wire_admin_recognitions_router(
             identity=identity_admin,
+            service_authenticator=StaticServiceAuthenticator(
+                token="svc-admin", client_id="osap-api", scopes=("support:admin",)
+            ),
             recognitions=recognitions,
             list_uc=AdminListRecognitionsUseCase(recognitions=recognitions),
             grant_uc=GrantRecognitionUseCase(
@@ -268,6 +287,15 @@ def _make_harness(
                 contributor_evaluator=contributor_eval,
                 clock=clock,
                 uow=uow,
+            ),
+        )
+    )
+    app.include_router(
+        wire_m2m_recognitions_router(
+            service_authenticator=service_auth,
+            m2m_scope=_m2m_scope,
+            list_uc=ListActiveProjectRecognitionsUseCase(
+                recognitions=recognitions, projects=projects
             ),
         )
     )
@@ -398,6 +426,42 @@ def test_public_only_active_and_consented_and_lean_fields() -> None:
         assert unknown.status_code == 404
 
 
+def test_public_project_lists_consented_active_grouped_by_user() -> None:
+    with _make_harness() as h:
+        _ensure_member(h.session, USER)
+        _ensure_member(h.session, OTHER)
+        _add_recognition(h.session, user_id=USER, rtype=RecognitionType.CONTRIBUTOR, public=True)
+        _add_recognition(h.session, user_id=USER, rtype=RecognitionType.VOICE, public=True)
+        # PUBLIC pero INACTIVE: no aparece.
+        _add_recognition(
+            h.session,
+            user_id=OTHER,
+            rtype=RecognitionType.SUPPORTER,
+            kind=RecognitionKind.DERIVED,
+            status=RecognitionStatus.INACTIVE,
+            public=True,
+            granted_by=None,
+            origin="rule:supporter",
+        )
+        # ACTIVO sin consentimiento: no aparece.
+        _add_recognition(h.session, user_id="user-omit", rtype=RecognitionType.FOUNDER)
+
+        resp = h.client.get("/api/v1/public/projects/omr/recognitions")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert [u["user_id"] for u in body] == [USER]
+        assert set(body[0].keys()) == {"user_id", "recognitions"}
+        assert [r["type"] for r in body[0]["recognitions"]] == ["contributor", "voice"]
+        assert set(body[0]["recognitions"][0].keys()) == {"type", "granted_at"}
+
+        eco = h.client.get(f"/api/v1/public/projects/{ECOSYSTEM_PROJECT_SLUG}/recognitions")
+        assert eco.status_code == 200 and eco.json() == []
+
+        nope = h.client.get("/api/v1/public/projects/nope/recognitions")
+        assert nope.status_code == 404
+
+
 # --- Admin ---------------------------------------------------------------------
 
 
@@ -420,37 +484,35 @@ def test_admin_requires_role_and_lists() -> None:
         assert ok.json()[0]["granted_by"] == ADMIN
 
 
-def test_admin_grant_contributor_and_reject_supporter_founder() -> None:
+def test_admin_grant_contributor_founder_and_reject_supporter() -> None:
     with _make_harness() as h:
         _ensure_member(h.session, OTHER)
         headers = _auth("admin-token")
 
-        grant = h.client.post(
-            "/api/v1/admin/recognitions",
-            json={
-                "user_id": OTHER,
-                "project": "omr",
-                "type": "contributor",
-                "reason": "150 obras",
-            },
-            headers=headers,
-        )
-        assert grant.status_code == 201
-        current = h.recognitions.get_current(OTHER, "omr", RecognitionType.CONTRIBUTOR)
-        assert current is not None and current.kind is RecognitionKind.GRANTED
-
-        for invalid_type in ("supporter", "founder"):
-            resp = h.client.post(
+        for grantable in ("contributor", "founder"):
+            grant = h.client.post(
                 "/api/v1/admin/recognitions",
                 json={
                     "user_id": OTHER,
                     "project": "omr",
-                    "type": invalid_type,
-                    "reason": "manual",
+                    "type": grantable,
+                    "reason": "150 obras",
                 },
                 headers=headers,
             )
-            assert resp.status_code == 422
+            assert grant.status_code == 201
+            current = h.recognitions.get_current(
+                OTHER, "omr", RecognitionType(grantable)
+            )
+            assert current is not None and current.kind is RecognitionKind.GRANTED
+
+        # SUPPORTER deriva de una transacción económica: no se concede manualmente.
+        resp = h.client.post(
+            "/api/v1/admin/recognitions",
+            json={"user_id": OTHER, "project": "omr", "type": "supporter", "reason": "manual"},
+            headers=headers,
+        )
+        assert resp.status_code == 422
 
 
 def test_admin_revoke_marks_inactive_and_records_event() -> None:
@@ -547,6 +609,79 @@ def test_m2m_cannot_spoof_source_field() -> None:
         )
         assert resp.status_code == 422  # extra="forbid": source nunca viaja en el body
         assert h.contributions.list_by_user_project(OTHER, "omr") == []
+
+
+def test_m2m_recognitions_requires_service_token() -> None:
+    with _make_harness() as h:
+        assert h.client.get("/api/v1/m2m/recognitions?project=omr").status_code == 401
+        assert (
+            h.client.get(
+                "/api/v1/m2m/recognitions?project=omr", headers=_auth("user-token")
+            ).status_code
+            == 401
+        )
+
+
+def test_m2m_recognitions_missing_scope_403() -> None:
+    with _make_harness() as h:
+        resp = h.client.get(
+            "/api/v1/m2m/recognitions?project=omr", headers=_auth("ingest-only-token")
+        )
+        assert resp.status_code == 403
+
+
+def test_m2m_recognitions_unknown_client_403() -> None:
+    with _make_harness() as h:
+        resp = h.client.get(
+            "/api/v1/m2m/recognitions?project=omr", headers=_auth("ghost-api-token")
+        )
+        assert resp.status_code == 403
+
+
+def test_m2m_recognitions_project_outside_allowlist_403() -> None:
+    with _make_harness() as h:
+        resp = h.client.get(
+            f"/api/v1/m2m/recognitions?project={ECOSYSTEM_PROJECT_SLUG}",
+            headers=_auth("service-token"),
+        )
+        assert resp.status_code == 403
+
+
+def test_m2m_recognitions_project_not_whitelisted_404() -> None:
+    with _make_harness() as h:
+        resp = h.client.get("/api/v1/m2m/recognitions?project=gp", headers=_auth("wide-token"))
+        assert resp.status_code == 404
+
+
+def test_m2m_recognitions_lists_active_regardless_of_public_grouped_by_user() -> None:
+    with _make_harness() as h:
+        _ensure_member(h.session, USER)
+        _ensure_member(h.session, OTHER)
+        # ACTIVOS sin consentimiento (`public=False`): la ruta M2M NO filtra por public.
+        _add_recognition(h.session, user_id=USER, rtype=RecognitionType.VOICE, public=False)
+        _add_recognition(h.session, user_id=USER, rtype=RecognitionType.CONTRIBUTOR)
+        _add_recognition(h.session, user_id=OTHER, rtype=RecognitionType.FOUNDER)
+        # INACTIVO (aunque public=True): nunca aparece.
+        _add_recognition(
+            h.session,
+            user_id=OTHER,
+            rtype=RecognitionType.SUPPORTER,
+            kind=RecognitionKind.DERIVED,
+            status=RecognitionStatus.INACTIVE,
+            public=True,
+            granted_by=None,
+            origin="rule:supporter",
+        )
+
+        resp = h.client.get("/api/v1/m2m/recognitions?project=omr", headers=_auth("service-token"))
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert [u["user_id"] for u in body] == [USER, OTHER]
+        assert set(body[0].keys()) == {"user_id", "recognitions"}
+        assert [r["type"] for r in body[0]["recognitions"]] == ["voice", "contributor"]
+        # Solo type + granted_at: sin public/origin/reason/granted_by ni economía.
+        assert set(body[0]["recognitions"][0].keys()) == {"type", "granted_at"}
 
 
 # --- Flujo de integración: OMR → Support → CONTRIBUTOR -------------------------

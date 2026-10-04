@@ -25,7 +25,7 @@ from domain.exceptions import (
     RecognitionConflictError,
     RecognitionNotFoundError,
 )
-from domain.ports.identity import IdentityError, IdentityResolver
+from domain.ports.identity import IdentityError, IdentityResolver, ServiceAuthenticator
 from domain.ports.repositories import RecognitionRepository
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin-recognitions"])
@@ -40,13 +40,20 @@ def _bearer_token(authorization: str | None = Header(default=None)) -> str:
 
 
 def _require_admin(bearer: str) -> str:
+    """Autoriza: usuario con rol `support:admin` o service con scope `support:admin`."""
     try:
         principal = _identity.resolve_principal(bearer)
+    except IdentityError:
+        principal = None  # no es token de usuario: probamos service token
+    if principal is not None:
+        if _ADMIN_ROLE not in principal.roles:
+            raise HTTPException(status_code=403, detail="rol support:admin requerido")
+        return principal.user_id
+    try:
+        service = _service_auth.authenticate_service(bearer, required_scope=_ADMIN_ROLE)
     except IdentityError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
-    if _ADMIN_ROLE not in principal.roles:
-        raise HTTPException(status_code=403, detail="rol support:admin requerido")
-    return principal.user_id
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return f"service:{service.client_id}"
 
 
 def _parse_type(raw: str) -> RecognitionType:
@@ -115,7 +122,7 @@ def admin_grant(
             project_slug=body.project,
             recognition_type=rtype,
             granted_by=admin_id,
-            reason=body.reason,
+            reason=(body.reason or "").strip() or "concesión manual (admin)",
         )
     except InvalidGrantError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -142,7 +149,7 @@ def admin_revoke(
         result = _revoke_uc.execute(
             recognition_id=recognition_id,
             granted_by=admin_id,
-            reason=body.reason,
+            reason=(body.reason or "").strip() or "revocación manual (admin)",
         )
     except RecognitionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -153,6 +160,7 @@ def admin_revoke(
 
 # Wiring: bootstrap (api/main.py) inyecta identity, repositorio y use cases.
 _identity: IdentityResolver
+_service_auth: ServiceAuthenticator
 _recognitions: RecognitionRepository
 _list_uc: AdminListRecognitionsUseCase
 _grant_uc: GrantRecognitionUseCase
@@ -162,13 +170,15 @@ _revoke_uc: RevokeRecognitionUseCase
 def wire_admin_recognitions_router(
     *,
     identity: IdentityResolver,
+    service_authenticator: ServiceAuthenticator,
     recognitions: RecognitionRepository,
     list_uc: AdminListRecognitionsUseCase,
     grant_uc: GrantRecognitionUseCase,
     revoke_uc: RevokeRecognitionUseCase,
 ) -> APIRouter:
-    global _identity, _recognitions, _list_uc, _grant_uc, _revoke_uc
+    global _identity, _service_auth, _recognitions, _list_uc, _grant_uc, _revoke_uc
     _identity = identity
+    _service_auth = service_authenticator
     _recognitions = recognitions
     _list_uc = list_uc
     _grant_uc = grant_uc

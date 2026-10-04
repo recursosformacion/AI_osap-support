@@ -8,9 +8,11 @@ Verifica que:
 
 from __future__ import annotations
 
+import jwt
 import pytest
 
 from api.main import ProductionWiringError, _identity_for, _payment_for
+from domain.ports.identity import IdentityError
 from infrastructure.config import PROJECT_ROOT, Settings
 from infrastructure.identity.dev_identity_resolver import DevIdentityResolver
 from infrastructure.identity.jwks_identity_resolver import JwksIdentityResolver
@@ -129,6 +131,29 @@ class TestDevAndTestUseFakes:
     def test_test_uses_static_identity(self) -> None:
         identity = _identity_for(_settings("test"))
         assert isinstance(identity, DevIdentityResolver)
+
+    def test_dev_identity_accepts_user_token(self) -> None:
+        identity = _identity_for(_settings("development"))
+        token = jwt.encode(
+            {"sub": "user-1", "roles": ["admin"], "token_use": "user", "typ": "access"},
+            "test-key-test-key-test-key-test-key",
+            algorithm="HS256",
+        )
+        principal = identity.resolve_principal(f"Bearer {token}")
+        assert principal.user_id == "user-1"
+        assert "admin" in principal.roles
+
+    def test_dev_identity_rejects_service_token(self) -> None:
+        # Un service token no debe colarse como usuario: así `_require_admin` cae al
+        # ServiceAuthenticator (scope support:admin) en lugar de dar 403 por falta de rol.
+        identity = _identity_for(_settings("development"))
+        token = jwt.encode(
+            {"sub": "svc-client", "token_use": "service", "typ": "service"},
+            "test-key-test-key-test-key-test-key",
+            algorithm="HS256",
+        )
+        with pytest.raises(IdentityError):
+            identity.resolve_principal(f"Bearer {token}")
 
     def test_development_uses_fake_payment_by_default(self) -> None:
         provider = _payment_for(_settings_without_toml("development"))

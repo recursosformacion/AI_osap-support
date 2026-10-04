@@ -16,9 +16,11 @@ from fastapi import FastAPI, Request, Response
 
 from api.routes.admin_payments import wire_admin_payments_router
 from api.routes.admin_recognitions import wire_admin_recognitions_router
+from api.routes.admin_web import wire_admin_web_router
 from api.routes.checkout import wire_checkout_router
 from api.routes.m2m_contributions import wire_m2m_contributions_router
 from api.routes.m2m_membership import wire_m2m_membership_router
+from api.routes.m2m_recognitions import wire_m2m_recognitions_router
 from api.routes.membership import wire_router
 from api.routes.public_recognitions import wire_public_recognitions_router
 from api.routes.recognitions import wire_recognitions_router
@@ -33,7 +35,13 @@ from application.use_cases.get_my_membership import GetMyMembershipUseCase
 from application.use_cases.get_public_recognitions import GetPublicRecognitionsUseCase
 from application.use_cases.grant_recognition import GrantRecognitionUseCase
 from application.use_cases.ingest_contribution import IngestContributionUseCase
+from application.use_cases.list_active_project_recognitions import (
+    ListActiveProjectRecognitionsUseCase,
+)
 from application.use_cases.list_my_recognitions import ListMyRecognitionsUseCase
+from application.use_cases.list_public_project_recognitions import (
+    ListPublicProjectRecognitionsUseCase,
+)
 from application.use_cases.process_payment_webhook import ProcessPaymentWebhookUseCase
 from application.use_cases.revoke_recognition import RevokeRecognitionUseCase
 from application.use_cases.set_recognition_consent import SetRecognitionConsentUseCase
@@ -111,14 +119,18 @@ def _identity_for(settings: Settings) -> IdentityResolver:
 
 
 def _service_authenticator_for(settings: Settings) -> ServiceAuthenticator:
-    if settings.server.env in _NON_PRODUCTION:
-        return StaticServiceAuthenticator(
-            token=settings.server.dev_service_token,
-            client_id="dev-service",
-            scopes=("support:ingest",),
-        )
+    # Si hay identidad configurada (jwks/issuer/audience), los service tokens se validan
+    # SIEMPRE contra el JWKS real (también en dev): osap-api emite tokens reales por
+    # client_credentials y los M2M (membresía/reconocimientos) deben aceptarlos. El
+    # authenticator estático queda solo como fallback cuando no hay identidad configurada.
     identity_cfg = settings.identity
     if not (identity_cfg.jwks_uri and identity_cfg.issuer and identity_cfg.audience):
+        if settings.server.env in _NON_PRODUCTION:
+            return StaticServiceAuthenticator(
+                token=settings.server.dev_service_token,
+                client_id="dev-service",
+                scopes=("support:ingest",),
+            )
         raise ProductionWiringError(
             "Production service authenticator is not configured: "
             "OSAP_SUPPORT_AUTH_JWKS_URI / ISSUER / AUDIENCE required"
@@ -311,12 +323,14 @@ def create_app(settings: Settings) -> FastAPI:
     )
     app.include_router(
         wire_public_recognitions_router(
-            GetPublicRecognitionsUseCase(recognitions=recognitions, projects=projects)
+            GetPublicRecognitionsUseCase(recognitions=recognitions, projects=projects),
+            ListPublicProjectRecognitionsUseCase(recognitions=recognitions, projects=projects),
         )
     )
     app.include_router(
         wire_admin_recognitions_router(
             identity=identity,
+            service_authenticator=_service_authenticator_for(settings),
             recognitions=recognitions,
             list_uc=AdminListRecognitionsUseCase(recognitions=recognitions),
             grant_uc=GrantRecognitionUseCase(
@@ -364,6 +378,18 @@ def create_app(settings: Settings) -> FastAPI:
                 memberships=SqlAlchemyMembershipRepository(session)
             ),
         )
+    )
+    app.include_router(
+        wire_m2m_recognitions_router(
+            service_authenticator=_service_authenticator_for(settings),
+            m2m_scope=lambda client_id: m2m_scope_for_settings(settings, client_id),
+            list_uc=ListActiveProjectRecognitionsUseCase(
+                recognitions=recognitions, projects=projects
+            ),
+        )
+    )
+    app.include_router(
+        wire_admin_web_router(service_authenticator=_service_authenticator_for(settings))
     )
 
     return app

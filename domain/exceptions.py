@@ -47,4 +47,5 @@ class RecognitionConflictError(SupportDomainError):
 
 
 class InvalidGrantError(SupportDomainError):
-    """Concesión manual inválida (solo CONTRIBUTOR/VOICE, con granted_by y reason)."""
+    """Concesión manual inválida (CONTRIBUTOR/VOICE/FOUNDER, con granted_by y reason;
+    SUPPORTER deriva de una transacción económica)."""

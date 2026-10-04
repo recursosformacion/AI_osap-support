@@ -46,6 +46,27 @@ class PublicRecognitionItem(BaseModel):
     granted_at: datetime
 
 
+class PublicProjectUserRecognitions(BaseModel):
+    """Reconocimientos públicos de un usuario dentro de un proyecto (listado por proyecto)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str
+    recognitions: list[PublicRecognitionItem]
+
+
+class ActiveProjectUserRecognitions(BaseModel):
+    """Reconocimientos ACTIVOS de un usuario en un proyecto (lectura M2M interna, ADR-017).
+
+    Mismo item inocuo que la surface pública (`type` + `granted_at`); sin filtro `public`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str
+    recognitions: list[PublicRecognitionItem]
+
+
 class AdminRecognitionItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -69,13 +90,15 @@ class AdminGrantRequest(BaseModel):
     user_id: str = Field(min_length=1)
     project: str = Field(min_length=1)
     type: str
-    reason: str = Field(min_length=1)
+    # Opcional: si falta, la ruta usa un motivo de auditoría por defecto ("concesión manual").
+    reason: str | None = None
 
 
 class AdminRevokeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    reason: str = Field(min_length=1)
+    # Opcional: si falta, la ruta usa un motivo de auditoría por defecto ("revocación manual").
+    reason: str | None = None
 
 
 class AdminRevokeResponse(BaseModel):

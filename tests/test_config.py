@@ -33,7 +33,9 @@ def test_identity_config_env_prefix() -> None:
     assert IdentityConfig.model_config["env_prefix"] == "OSAP_SUPPORT_AUTH_"
 
 
-def test_identity_service_audience_from_toml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_identity_service_audience_from_toml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """`[identity] service_audience` debe aplicarse (bug de cableado 4.2).
 
     Distingue la audiencia de tokens de usuario (`audience`) de la de service tokens M2M

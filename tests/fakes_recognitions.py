@@ -218,6 +218,22 @@ class FakeRecognitionRepository(RecognitionRepository):
             if r.status is RecognitionStatus.ACTIVE and r.public
         ]
 
+    def list_public_by_project(self, project_slug: str) -> list[Recognition]:
+        return [
+            r
+            for r in self._store.values()
+            if r.project_slug == project_slug
+            and r.status is RecognitionStatus.ACTIVE
+            and r.public
+        ]
+
+    def list_active_by_project(self, project_slug: str) -> list[Recognition]:
+        return [
+            r
+            for r in self._store.values()
+            if r.project_slug == project_slug and r.status is RecognitionStatus.ACTIVE
+        ]
+
     @staticmethod
     def _key(recognition: Recognition) -> tuple[str, str, str]:
         return (

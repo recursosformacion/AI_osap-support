@@ -1,9 +1,10 @@
 """Resolver de identidad para desarrollo (osap-support).
 
-Solo para entornos no productivos: acepta CUALQUIER Bearer token de osap-auth y extrae
-user_id/roles del payload (sin verificar firma, igual que el bypass de dev de osap-api).
-Si el token no es un JWT parseable, cae al token estático de desarrollo (dev-token).
-NUNCA debe activarse en producción.
+Solo para entornos no productivos: acepta cualquier Bearer token **de usuario** de osap-auth
+y extrae user_id/roles del payload (sin verificar firma, igual que el bypass de dev de
+osap-api). Los service tokens (token_use/typ = service) se rechazan con `IdentityError` para
+que la ruta pruebe el `ServiceAuthenticator` (p. ej. `support:admin`). Si el token no es un
+JWT parseable, cae al token estático de desarrollo (dev-token). NUNCA en producción.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from domain.ports.identity import (
     IdentityPrincipal,
     IdentityResolver,
 )
+from infrastructure.identity._claims import user_principal_from_payload
 
 _BEARER = "Bearer "
 
@@ -43,11 +45,10 @@ class DevIdentityResolver(IdentityResolver):
 
         payload = _decode_payload(token)
         if payload is not None:
-            sub = payload.get("sub")
-            raw_roles = payload.get("roles", [])
-            roles = tuple(str(r) for r in raw_roles) if isinstance(raw_roles, list) else ()
-            if isinstance(sub, str) and sub:
-                return IdentityPrincipal(user_id=sub, roles=roles)
+            # Solo tokens de USUARIO (token_use/typ = user/access). Un service token debe
+            # rechazarse aquí (IdentityError) para que el llamante pruebe el
+            # ServiceAuthenticator; si no, `_require_admin` lo trataría como usuario sin rol.
+            return user_principal_from_payload(payload)
 
         if token == self._dev_token:
             return IdentityPrincipal(user_id=self._dev_user_id, roles=())
