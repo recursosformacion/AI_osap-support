@@ -16,7 +16,8 @@ param(
     [string]$User = "ocw",
     [string]$RemoteDir = "/home/ocw/openmusicrepository.com/osap-support",
     [switch]$SkipTests,
-    [switch]$SkipMigrations
+    [switch]$SkipMigrations,
+    [switch]$WithConfig
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,9 +42,13 @@ if (-not $SkipTests) {
     Write-Host "[1/7] Tests omitidos"
 }
 
-Write-Host "[2/7] Comprobando osap.production.toml..."
 $prodConfig = Join-Path $root "osap.production.toml"
-if (-not (Test-Path $prodConfig)) { throw "No existe osap.production.toml" }
+if ($WithConfig) {
+    Write-Host "[2/7] Comprobando osap.production.toml..."
+    if (-not (Test-Path $prodConfig)) { throw "No existe osap.production.toml" }
+} else {
+    Write-Host "[2/7] Config NO se despliega (usa -WithConfig para subir osap.production.toml)"
+}
 
 Write-Host "[3/7] Subiendo código al servidor..."
 tar.exe -czf - `
@@ -57,10 +62,17 @@ if ($LASTEXITCODE -ne 0) { throw "Fallo al subir el código" }
 Write-Host "[4/7] Preparando venv en el servidor (si no existe)..."
 Invoke-Remote "cd $RemoteDir && (test -x .venv/bin/python || python3 -m venv .venv) && ./.venv/bin/pip install -e . -q"
 
-Write-Host "[5/7] Desplegando osap.production.toml como osap.toml..."
-scp -o BatchMode=yes $prodConfig "${User}@${Server}:/tmp/osap.production.toml"
-if ($LASTEXITCODE -ne 0) { throw "Fallo al subir la configuración" }
-Invoke-Remote "cp /tmp/osap.production.toml $RemoteDir/osap.toml && rm -f /tmp/osap.production.toml"
+if ($WithConfig) {
+    Write-Host "[5/7] Desplegando osap.production.toml como osap.toml (LF)..."
+    $lf = Join-Path $env:TEMP "osap-support.osap.production.lf.toml"
+    ([IO.File]::ReadAllText($prodConfig)) -replace "`r`n", "`n" | Set-Content -LiteralPath $lf -NoNewline -Encoding utf8
+    scp -o BatchMode=yes $lf "${User}@${Server}:/tmp/osap.production.toml"
+    if ($LASTEXITCODE -ne 0) { throw "Fallo al subir la configuración" }
+    Invoke-Remote "cp /tmp/osap.production.toml $RemoteDir/osap.toml && rm -f /tmp/osap.production.toml"
+} else {
+    Write-Host "[5/7] Config no se despliega; verificando osap.toml remoto..."
+    Invoke-Remote "test -f $RemoteDir/osap.toml"
+}
 
 if (-not $SkipMigrations) {
     Write-Host "[6/7] Ejecutando migraciones..."
