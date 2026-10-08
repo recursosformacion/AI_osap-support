@@ -18,6 +18,7 @@ from application.use_cases.evaluate_supporter import EvaluateSupporterRecognitio
 from application.use_cases.grant_recognition import GrantRecognitionUseCase
 from application.use_cases.ingest_contribution import IngestContributionUseCase
 from application.use_cases.list_my_recognitions import ListMyRecognitionsUseCase
+from application.use_cases.revoke_recognition import RevokeRecognitionUseCase
 from application.use_cases.set_recognition_consent import SetRecognitionConsentUseCase
 from domain.entities import (
     ContributionType,
@@ -112,6 +113,14 @@ class Harness:
             events=self.events,
             projects=self.projects,
             support_members=self.support_members,
+            clock=self.clock,
+            uow=self.uow,
+        )
+
+    def revoke_uc(self) -> RevokeRecognitionUseCase:
+        return RevokeRecognitionUseCase(
+            recognitions=self.recognitions,
+            events=self.events,
             clock=self.clock,
             uow=self.uow,
         )
@@ -399,6 +408,37 @@ def test_grant_conflicts_when_recognition_exists() -> None:
             granted_by="admin-1",
             reason="segunda voz",
         )
+
+
+def test_grant_reactivates_revoked_recognition() -> None:
+    h = Harness()
+    grant = h.grant_uc()
+    first = grant.execute(
+        user_id="u-2",
+        project_slug="omr",
+        recognition_type=RecognitionType.FOUNDER,
+        granted_by="admin-1",
+        reason="fundador",
+    )
+    assert h.revoke_uc().execute(
+        recognition_id=first.recognition_id, granted_by="admin-1", reason="retirado"
+    ).changed
+    rec = _current(h, "u-2", "omr", RecognitionType.FOUNDER)
+    assert rec is not None and rec.status is RecognitionStatus.INACTIVE
+
+    # Re-conceder reactiva la MISMA fila (uq user+project+type): sin conflicto.
+    again = grant.execute(
+        user_id="u-2",
+        project_slug="omr",
+        recognition_type=RecognitionType.FOUNDER,
+        granted_by="admin-2",
+        reason="reincorporado",
+    )
+    assert again.recognition_id == first.recognition_id
+    rec = _current(h, "u-2", "omr", RecognitionType.FOUNDER)
+    assert rec is not None
+    assert rec.status is RecognitionStatus.ACTIVE
+    assert rec.granted_by == "admin-2" and rec.reason == "reincorporado"
 
 
 # --- Consentimiento (ADR-015) ----------------------------------------------------

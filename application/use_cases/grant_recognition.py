@@ -86,28 +86,38 @@ class GrantRecognitionUseCase:
             raise InvalidGrantError("reason es obligatorio (auditoría)")
         if self._projects.get_by_slug(project_slug) is None:
             raise ProjectNotFoundError(f"proyecto desconocido: {project_slug}")
-        if (
-            self._recognitions.get_current(user_id, project_slug, recognition_type)
-            is not None
-        ):
+        existing = self._recognitions.get_current(user_id, project_slug, recognition_type)
+        if existing is not None and existing.status is RecognitionStatus.ACTIVE:
             raise RecognitionConflictError(
                 f"ya existe {recognition_type.value} para {user_id} en {project_slug}"
             )
 
         now = self._clock.utc_now()
         self._ensure_support_member(user_id)
-        recognition = Recognition(
-            id=None,
-            user_id=user_id,
-            project_slug=project_slug,
-            recognition_type=recognition_type,
-            kind=RecognitionKind.GRANTED,
-            status=RecognitionStatus.ACTIVE,
-            granted_at=now,
-            granted_by=granted_by,
-            reason=reason,
-        )
-        recognition = self._recognitions.add(recognition)
+        if existing is not None:
+            # Fila previa REVOCADA: uq (user+project+type) impide insertar otra → se REACTIVA
+            # la misma fila y se registra el evento GRANTED (histórico preservado).
+            existing.kind = RecognitionKind.GRANTED
+            existing.status = RecognitionStatus.ACTIVE
+            existing.granted_at = now
+            existing.granted_by = granted_by
+            existing.reason = reason
+            self._recognitions.update(existing)
+            recognition_id = existing.id
+        else:
+            recognition = Recognition(
+                id=None,
+                user_id=user_id,
+                project_slug=project_slug,
+                recognition_type=recognition_type,
+                kind=RecognitionKind.GRANTED,
+                status=RecognitionStatus.ACTIVE,
+                granted_at=now,
+                granted_by=granted_by,
+                reason=reason,
+            )
+            recognition = self._recognitions.add(recognition)
+            recognition_id = recognition.id
         self._events.add(
             RecognitionEvent(
                 id=None,
@@ -126,7 +136,7 @@ class GrantRecognitionUseCase:
             user_id=user_id,
             project_slug=project_slug,
             recognition_type=recognition_type,
-            recognition_id=recognition.id,  # type: ignore[arg-type]
+            recognition_id=recognition_id,  # type: ignore[arg-type]
         )
 
     def _ensure_support_member(self, user_id: str) -> None:
