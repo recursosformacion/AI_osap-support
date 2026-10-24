@@ -65,3 +65,15 @@ usuario (osap-auth JWT)
 → persistencia
 → CommunicationEvent → worker → SMTP
 ```
+
+
+## Ecosistema OSAP
+
+Este servicio proporciona funciones de soporte económico para el ecosistema **OSAP — Open Score Acquisition Platform**. Es un componente independiente con configuración y despliegue propios.
+
+- **[OSAP core](https://github.com/recursosformacion/AI_GAMEPC2)** — motor principal de resolución de recursos musicales.
+- [ai-importacion](https://github.com/recursosformacion/ai-importacion) — descubrimiento y revisión de materiales de Internet Archive.
+- [ai_recogeYouTube](https://github.com/recursosformacion/ai_recogeYouTube) — descubrimiento y revisión de grabaciones de YouTube.
+- [AI_osap-auth](https://github.com/recursosformacion/AI_osap-auth) — servicio de identidad y autenticación.
+- [AI_osap-storage](https://github.com/recursosformacion/AI_osap-storage) — servicio de datos y almacenamiento del catálogo.
+- Sitio público: [openmusicrepository.com](https://openmusicrepository.com)
