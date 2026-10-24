@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "osap-support"
-version = "5.7.0"
+version = "5.7.1"
 description = "Servicio de apoyo/membresía del ecosistema OSAP (relación de apoyo, economía no sensible y comunicaciones)."
 requires-python = ">=3.12"
 dependencies = [
@@ -58,4 +58,5 @@ python_version = "3.12"
 plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
 warn_unused_configs = true
+
 
