@@ -47,16 +47,22 @@ class SmtpEmailSender(EmailSender):
         self._templates = templates or {}
 
     def send(self, message: EmailMessage) -> bool:
-        if message.template not in self._templates:
-            raise EmailSendError(f"plantilla no definida: {message.template}")
-        body = self._templates[message.template]
-        subject = _subject_for(message.template, body)
+        if message.body:
+            body = message.body
+            subject = message.subject or _subject_for(message.template, body)
+        else:
+            if message.template not in self._templates:
+                raise EmailSendError(f"plantilla no definida: {message.template}")
+            body = self._templates[message.template]
+            subject = _subject_for(message.template, body)
 
         email = _EmailMessage()
         email["From"] = self._settings.from_address
         email["To"] = message.recipient_email
         email["Subject"] = subject
         email.set_content(body)
+        if message.html:
+            email.add_alternative(message.html, subtype="html")
 
         try:
             if self._settings.use_tls:

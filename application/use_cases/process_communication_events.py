@@ -60,6 +60,9 @@ class ProcessCommunicationEventsUseCase:
             template=event.template,
             recipient_email=event.recipient_email,
             origin_event_ref=str(event.id) if event.id is not None else None,
+            subject=event.subject,
+            body=event.body,
+            html=event.body_html,
         )
         try:
             accepted = self._email_sender.send(message)

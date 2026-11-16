@@ -156,6 +156,10 @@ class CommunicationEvent:
     created_at: datetime = field(default_factory=utc_now)
     sent_at: datetime | None = None
     last_error: str | None = None
+    subject: str | None = None
+    body: str | None = None
+    body_html: str | None = None
+    dedupe_key: str | None = None
 
 
 # --- Reconocimientos y contribuciones (ADR-015/016/017, Fase 3) ----------------

@@ -17,6 +17,9 @@ class SentEmail:
     template: str
     recipient_email: str
     origin_event_ref: str | None = None
+    subject: str | None = None
+    body: str | None = None
+    html: str | None = None
     context: dict[str, object] = field(default_factory=dict)
 
 
@@ -36,6 +39,9 @@ class FakeEmailSender(EmailSender):
                 template=message.template,
                 recipient_email=message.recipient_email,
                 origin_event_ref=message.origin_event_ref,
+                subject=message.subject,
+                body=message.body,
+                html=message.html,
                 context=dict(message.context),
             )
         )

@@ -149,3 +149,10 @@ def test_origin_event_id_preserved(
     worker.execute()
     assert len(sender.sent) == 1
     assert sender.sent[0].origin_event_ref == "1"
+
+def test_news_digest_body_is_sent(env) -> None:
+    repo, sender = env
+    repo.add(_event(template="news_digest", subject="Noticias", body="Contenido del boletín"))
+    _make_worker(repo, sender).execute()
+    assert sender.sent[0].subject == "Noticias"
+    assert sender.sent[0].body == "Contenido del boletín"

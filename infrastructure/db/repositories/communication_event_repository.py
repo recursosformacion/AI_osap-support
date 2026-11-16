@@ -70,6 +70,10 @@ class SqlAlchemyCommunicationEventRepository(CommunicationEventRepository):
             created_at=e.created_at,
             sent_at=e.sent_at,
             last_error=e.last_error,
+            subject=e.subject,
+            body=e.body,
+            body_html=e.body_html,
+            dedupe_key=e.dedupe_key,
         )
 
     def _to_domain(self, model: CommunicationEventModel) -> CommunicationEvent:
@@ -85,4 +89,8 @@ class SqlAlchemyCommunicationEventRepository(CommunicationEventRepository):
             created_at=model.created_at,
             sent_at=model.sent_at,
             last_error=model.last_error,
+            subject=model.subject,
+            body=model.body,
+            body_html=model.body_html,
+            dedupe_key=model.dedupe_key,
         )

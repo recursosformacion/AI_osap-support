@@ -127,6 +127,10 @@ class CommunicationEventModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    body_html: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dedupe_key: Mapped[str | None] = mapped_column(String(160), nullable=True, unique=True)
 
 
 class ProjectModel(Base):

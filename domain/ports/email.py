@@ -17,6 +17,9 @@ class EmailMessage:
     template: str  # clave de plantilla (welcome, thanks, renewal, ...)
     recipient_email: str
     origin_event_ref: str | None = None  # referencia al CommunicationEvent/PaymentEvent
+    subject: str | None = None
+    body: str | None = None
+    html: str | None = None
     context: dict[str, object] = field(default_factory=dict)
 
 

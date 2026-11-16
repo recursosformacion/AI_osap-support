@@ -18,6 +18,7 @@ from api.routes.admin_payments import wire_admin_payments_router
 from api.routes.admin_recognitions import wire_admin_recognitions_router
 from api.routes.admin_web import wire_admin_web_router
 from api.routes.checkout import wire_checkout_router
+from api.routes.internal_communications import wire_internal_communications_router
 from api.routes.m2m_contributions import wire_m2m_contributions_router
 from api.routes.m2m_membership import wire_m2m_membership_router
 from api.routes.m2m_recognitions import wire_m2m_recognitions_router
@@ -207,6 +208,7 @@ def create_app(settings: Settings) -> FastAPI:
     # Wiring (Fase 5/6): FastAPI → use case → ports → infraestructura.
     session = make_session_factory()()
     app.state.db_session = session
+    wire_internal_communications_router(app)
 
     # La sesión es única para toda la app (la comparten todos los repositorios/UoW). Si una
     # petición falla a mitad de transacción, SQLAlchemy la deja inválida y TODAS las
