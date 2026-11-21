@@ -4,9 +4,10 @@ Igual que osap-storage tiene su capa web de mantenimiento, osap-support expone l
 página es un shell HTML cuyo JavaScript llama a la API admin JSON ya existente
 (`/api/v1/admin/recognitions`, scope `support:admin`); osap-api la abre con un service token.
 
-El token llega por query (`?token=`) desde osap-api y se inyecta en la página. La página NO
-contiene lógica de negocio: solo lista y delega en la API admin (los propios endpoints validan
-el token/scope).
+osap-api entrega el token de servicio mediante un formulario POST a `/session`. El endpoint
+valida el origen y el scope `support:admin`, establece una cookie HttpOnly de duración limitada
+y redirige a la página. La página no recibe ni expone el token al JavaScript; las operaciones
+usan la cookie same-origin y los endpoints admin vuelven a validar el token y su scope.
 """
 
 # ruff: noqa: E501 — la página HTML/CSS/JS embebida tiene líneas largas a propósito.
