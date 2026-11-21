@@ -49,7 +49,7 @@ def test_support_handoff_sets_http_only_scoped_cookie_and_redirects():
 def test_support_admin_page_uses_cookie_and_rejects_url_token():
     client, token = _client()
     assert client.get("/api/v1/admin/web/recognitions").status_code == 401
-    client.cookies.set("osap_support_admin", token, secure=True, path="/api/v1/admin")
+    client.cookies.set("osap_support_admin", token, secure=True, path="/")
     assert client.get("/api/v1/admin/web/recognitions").status_code == 200
     assert client.get("/api/v1/admin/web/recognitions", params={"token": token}).status_code == 400
 
