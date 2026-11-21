@@ -28,7 +28,7 @@ router = APIRouter(prefix="/api/v1/admin/web", tags=["admin-web"])
 
 _ADMIN_SCOPE = "support:admin"
 
-_PAGE = """<!doctype html>
+_PAGE = r"""<!doctype html>
 <html lang="es">
 <head>
 <meta charset="utf-8" />
