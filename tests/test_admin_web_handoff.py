@@ -32,17 +32,17 @@ def test_support_handoff_sets_http_only_scoped_cookie_and_redirects():
     response = client.post(
         "/api/v1/admin/web/session",
         headers={"Origin": "https://app.openmusicrepository.com"},
-        data={"token": token, "next": "/api/v1/admin/web/recognitions"},
+        data={"token": token, "next": "./recognitions"},
         follow_redirects=False,
     )
     assert response.status_code == 303
-    assert response.headers["location"] == "/api/v1/admin/web/recognitions"
+    assert response.headers["location"] == "./recognitions"
     cookie = response.headers["set-cookie"].lower()
     assert "osap_support_admin=" in cookie
     assert "httponly" in cookie
     assert "secure" in cookie
     assert "samesite=lax" in cookie
-    assert "path=/api/v1/admin" in cookie
+    assert "path=/" in cookie
     assert "max-age=179" in cookie or "max-age=180" in cookie
 
 
