@@ -4,7 +4,9 @@ import time
 from types import SimpleNamespace
 
 import jwt
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from starlette.requests import Request
+import pytest
 from fastapi.testclient import TestClient
 
 from api.routes.admin_web import wire_admin_web_router
@@ -70,3 +72,22 @@ def test_support_handoff_rejects_untrusted_origin_and_external_redirect():
         follow_redirects=False,
     )
     assert bad_next.status_code == 400
+
+
+
+def test_support_admin_api_rejects_token_query_parameter():
+    from api.routes.admin_recognitions import _bearer_token
+
+    request = Request({
+        "type": "http",
+        "method": "GET",
+        "scheme": "https",
+        "path": "/api/v1/admin/recognitions",
+        "query_string": b"token=secret&user_id=user-1",
+        "headers": [],
+        "server": ("support.example", 443),
+        "client": ("127.0.0.1", 12345),
+    })
+    with pytest.raises(HTTPException) as exc:
+        _bearer_token(request)
+    assert exc.value.status_code == 400
