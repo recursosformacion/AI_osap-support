@@ -17,10 +17,9 @@ from __future__ import annotations
 import time
 from urllib.parse import parse_qs
 
-import jwt
-
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+import jwt
 
 from domain.ports.identity import IdentityError, ServiceAuthenticator
 
