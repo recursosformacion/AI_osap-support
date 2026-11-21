@@ -14,7 +14,7 @@ el token/scope).
 from __future__ import annotations
 
 import time
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs
 
 import jwt
 
