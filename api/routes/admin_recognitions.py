@@ -36,6 +36,8 @@ _ADMIN_ROLE = "support:admin"
 def _bearer_token(
     request: Request, authorization: str | None = Header(default=None)
 ) -> str:
+    if "token" in request.query_params:
+        raise HTTPException(status_code=400, detail="no se admiten tokens en la URL")
     if authorization and authorization.lower().startswith("bearer "):
         return authorization.split(" ", 1)[1]
     cookie = request.cookies.get("osap_support_admin", "").strip()
