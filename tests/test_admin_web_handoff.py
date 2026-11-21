@@ -13,7 +13,7 @@ from api.routes.admin_web import wire_admin_web_router
 
 
 class _ServiceAuth:
-    def authenticate_service(self, token: str, *, required_scope: str):
+    def authenticate_service(self, token: str, *, required_scope: str) -> SimpleNamespace:
         assert token.count(".") == 2
         assert required_scope == "support:admin"
         return SimpleNamespace(client_id="osap-api", scopes=("support:admin",))
@@ -29,7 +29,7 @@ def _client() -> tuple[TestClient, str]:
     return TestClient(app, base_url="https://support.openmusicrepository.com"), token
 
 
-def test_support_handoff_sets_http_only_scoped_cookie_and_redirects():
+def test_support_handoff_sets_http_only_scoped_cookie_and_redirects() -> None:
     client, token = _client()
     response = client.post(
         "/api/v1/admin/web/session",
@@ -48,7 +48,7 @@ def test_support_handoff_sets_http_only_scoped_cookie_and_redirects():
     assert "max-age=179" in cookie or "max-age=180" in cookie
 
 
-def test_support_admin_page_uses_cookie_and_rejects_url_token():
+def test_support_admin_page_uses_cookie_and_rejects_url_token() -> None:
     client, token = _client()
     assert client.get("/api/v1/admin/web/recognitions").status_code == 401
     client.cookies.set("osap_support_admin", token, path="/")
@@ -56,7 +56,7 @@ def test_support_admin_page_uses_cookie_and_rejects_url_token():
     assert client.get("/api/v1/admin/web/recognitions", params={"token": token}).status_code == 400
 
 
-def test_support_handoff_rejects_untrusted_origin_and_external_redirect():
+def test_support_handoff_rejects_untrusted_origin_and_external_redirect() -> None:
     client, token = _client()
     bad_origin = client.post(
         "/api/v1/admin/web/session",
@@ -74,7 +74,7 @@ def test_support_handoff_rejects_untrusted_origin_and_external_redirect():
     assert bad_next.status_code == 400
 
 
-def test_support_admin_api_rejects_token_query_parameter():
+def test_support_admin_api_rejects_token_query_parameter() -> None:
     from api.routes.admin_recognitions import _bearer_token
 
     request = Request({
