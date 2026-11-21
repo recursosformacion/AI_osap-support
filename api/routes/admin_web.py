@@ -85,7 +85,8 @@ _PAGE = """<!doctype html>
   </div>
 </main>
 <script>
-const api = (path, opts = {}) => fetch(path, { ...opts, credentials: "same-origin", headers: { "Content-Type": "application/json", ...(opts.headers || {}) } });
+const apiBase = location.pathname.replace(/\/api\/v1\/admin\/web\/recognitions\/?$/, "");
+const api = (path, opts = {}) => fetch(apiBase + path, { ...opts, credentials: "same-origin", headers: { "Content-Type": "application/json", ...(opts.headers || {}) } });
 const el = (id) => document.getElementById(id);
 const esc = (v) => String(v == null ? "" : v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -158,16 +159,8 @@ async def create_admin_session(request: Request):
     except UnicodeDecodeError:
         return JSONResponse(status_code=400, content={"detail": "formulario inválido"})
     token = (fields.get("token") or [""])[0].strip()
-    next_path = (fields.get("next") or ["/api/v1/admin/web/recognitions"])[0].strip()
-    parsed = urlsplit(next_path)
-    if (
-        not token
-        or parsed.scheme
-        or parsed.netloc
-        or parsed.fragment
-        or parsed.path != "/api/v1/admin/web/recognitions"
-        or "\\" in next_path
-    ):
+    next_path = (fields.get("next") or ["./recognitions"])[0].strip()
+    if not token or next_path != "./recognitions":
         return JSONResponse(status_code=400, content={"detail": "handoff inválido"})
     try:
         _service_authenticator.authenticate_service(token, required_scope=_ADMIN_SCOPE)
@@ -181,7 +174,7 @@ async def create_admin_session(request: Request):
         return JSONResponse(status_code=401, content={"detail": "service token expirado"})
     response = RedirectResponse(url=next_path, status_code=303)
     response.set_cookie(
-        key="osap_support_admin", value=token, max_age=max_age, path="/api/v1/admin",
+        key="osap_support_admin", value=token, max_age=max_age, path="/",
         httponly=True, secure=True, samesite="lax"
     )
     response.headers["Cache-Control"] = "no-store"
