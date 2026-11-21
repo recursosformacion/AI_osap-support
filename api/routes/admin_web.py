@@ -20,7 +20,7 @@ from urllib.parse import parse_qs
 import jwt
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from domain.ports.identity import IdentityError, ServiceAuthenticator
 
@@ -143,7 +143,7 @@ el("rows").addEventListener("click", (e) => { const b = e.target.closest("[data-
 
 
 @router.post("/session", include_in_schema=False)
-async def create_admin_session(request: Request):
+async def create_admin_session(request: Request) -> Response:
     settings = request.app.state.settings
     allowed = {str(origin).rstrip("/") for origin in settings.server.admin_handoff_origins}
     origin = request.headers.get("origin", "").rstrip("/")
