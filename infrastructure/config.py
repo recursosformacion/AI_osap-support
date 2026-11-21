@@ -76,6 +76,7 @@ class ServerConfig:
     env: str = "development"
     debug: bool = False
     cors_origins: list[str] = []
+    admin_handoff_origins: list[str] = []
     # Identidad estática SOLO para dev/test (JWKS productivo queda ABIERTO, ADR-002).
     dev_token: str = "dev-token"
     dev_user_id: str = "dev-user"
@@ -398,6 +399,12 @@ class Settings:
         if isinstance(origins, str):
             origins = [o.strip() for o in origins.split(",") if o.strip()]
         self.server.cors_origins = list(origins)
+        server_toml = self._toml_data.get("server", {})
+        handoff_origins = server_toml.get("admin_handoff_origins", []) if isinstance(server_toml, dict) else []
+        if isinstance(handoff_origins, str):
+            handoff_origins = [o.strip() for o in handoff_origins.split(",") if o.strip()]
+        if isinstance(handoff_origins, list):
+            self.server.admin_handoff_origins = [str(o).rstrip("/") for o in handoff_origins if str(o).strip()]
 
         dbt = data.get("database", {})
         if not isinstance(dbt, dict):
@@ -435,6 +442,9 @@ def _apply_server_env(server: ServerConfig) -> None:
     origins = os.environ.get("OSAP_SUPPORT_CORS_ORIGINS")
     if origins:
         server.cors_origins = [o.strip() for o in origins.split(",") if o.strip()]
+    handoff_origins = os.environ.get("OSAP_SUPPORT_SERVER_ADMIN_HANDOFF_ORIGINS")
+    if handoff_origins is not None:
+        server.admin_handoff_origins = [o.strip().rstrip("/") for o in handoff_origins.split(",") if o.strip()]
 
 
 def _coerce_typed(key: str, value: Any, conv: Any) -> Any:
