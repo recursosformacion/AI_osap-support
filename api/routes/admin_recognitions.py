@@ -7,7 +7,7 @@ adaptadores finos: toda la lógica vive en los use cases.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
 from api.schemas.recognitions import (
     AdminGrantRequest,
@@ -33,11 +33,20 @@ router = APIRouter(prefix="/api/v1/admin", tags=["admin-recognitions"])
 _ADMIN_ROLE = "support:admin"
 
 
-def _bearer_token(authorization: str | None = Header(default=None)) -> str:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="autenticación requerida")
-    return authorization.split(" ", 1)[1]
-
+def _bearer_token(
+    request: Request, authorization: str | None = Header(default=None)
+) -> str:
+    if authorization and authorization.lower().startswith("bearer "):
+        return authorization.split(" ", 1)[1]
+    cookie = request.cookies.get("osap_support_admin", "").strip()
+    if cookie:
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+            origin = request.headers.get("origin", "").rstrip("/")
+            expected = f"{request.url.scheme}://{request.url.netloc}".rstrip("/")
+            if not origin or origin != expected:
+                raise HTTPException(status_code=403, detail="origen no permitido")
+        return cookie
+    raise HTTPException(status_code=401, detail="autenticación requerida")
 
 def _require_admin(bearer: str) -> str:
     """Autoriza: usuario con rol `support:admin` o service con scope `support:admin`."""
