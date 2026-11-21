@@ -403,7 +403,7 @@ class Settings:
         handoff_origins = server_toml.get("admin_handoff_origins", []) if isinstance(server_toml, dict) else []
         if isinstance(handoff_origins, str):
             handoff_origins = [o.strip() for o in handoff_origins.split(",") if o.strip()]
-        if isinstance(handoff_origins, list):
+        if os.environ.get("OSAP_SUPPORT_SERVER_ADMIN_HANDOFF_ORIGINS") is None and isinstance(handoff_origins, list):
             self.server.admin_handoff_origins = [str(o).rstrip("/") for o in handoff_origins if str(o).strip()]
 
         dbt = data.get("database", {})
