@@ -13,8 +13,13 @@ el token/scope).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import HTMLResponse
+import time
+from urllib.parse import parse_qs, urlsplit
+
+import jwt
+
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from domain.ports.identity import IdentityError, ServiceAuthenticator
 
@@ -80,8 +85,7 @@ _PAGE = """<!doctype html>
   </div>
 </main>
 <script>
-const TOKEN = "__TOKEN__";
-const api = (path, opts = {}) => fetch(path, { ...opts, headers: { "Authorization": "Bearer " + TOKEN, "Content-Type": "application/json" } });
+const api = (path, opts = {}) => fetch(path, { ...opts, credentials: "same-origin", headers: { "Content-Type": "application/json", ...(opts.headers || {}) } });
 const el = (id) => document.getElementById(id);
 const esc = (v) => String(v == null ? "" : v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -136,14 +140,67 @@ el("rows").addEventListener("click", (e) => { const b = e.target.closest("[data-
 """
 
 
+@router.post("/session", include_in_schema=False)
+async def create_admin_session(request: Request):
+    settings = request.app.state.settings
+    allowed = {str(origin).rstrip("/") for origin in settings.server.admin_handoff_origins}
+    origin = request.headers.get("origin", "").rstrip("/")
+    if not origin or origin not in allowed:
+        return JSONResponse(status_code=403, content={"detail": "origen de handoff no permitido"})
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if content_type != "application/x-www-form-urlencoded":
+        return JSONResponse(status_code=415, content={"detail": "se requiere application/x-www-form-urlencoded"})
+    body = await request.body()
+    if len(body) > 16384:
+        return JSONResponse(status_code=413, content={"detail": "solicitud demasiado grande"})
+    try:
+        fields = parse_qs(body.decode("utf-8"), keep_blank_values=True)
+    except UnicodeDecodeError:
+        return JSONResponse(status_code=400, content={"detail": "formulario inválido"})
+    token = (fields.get("token") or [""])[0].strip()
+    next_path = (fields.get("next") or ["/api/v1/admin/web/recognitions"])[0].strip()
+    parsed = urlsplit(next_path)
+    if (
+        not token
+        or parsed.scheme
+        or parsed.netloc
+        or parsed.fragment
+        or parsed.path != "/api/v1/admin/web/recognitions"
+        or "\\" in next_path
+    ):
+        return JSONResponse(status_code=400, content={"detail": "handoff inválido"})
+    try:
+        _service_authenticator.authenticate_service(token, required_scope=_ADMIN_SCOPE)
+        claims = jwt.decode(token, options={"verify_signature": False, "verify_exp": False})
+    except Exception as exc:
+        if isinstance(exc, IdentityError):
+            return JSONResponse(status_code=403, content={"detail": str(exc)})
+        return JSONResponse(status_code=401, content={"detail": "service token inválido"})
+    max_age = int(claims.get("exp", 0)) - int(time.time())
+    if max_age <= 0:
+        return JSONResponse(status_code=401, content={"detail": "service token expirado"})
+    response = RedirectResponse(url=next_path, status_code=303)
+    response.set_cookie(
+        key="osap_support_admin", value=token, max_age=max_age, path="/api/v1/admin",
+        httponly=True, secure=True, samesite="lax"
+    )
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
 @router.get("/recognitions", response_class=HTMLResponse)
-def recognitions_page(token: str = Query(..., min_length=1)) -> HTMLResponse:
+def recognitions_page(request: Request) -> HTMLResponse:
+    if "token" in request.query_params:
+        raise HTTPException(status_code=400, detail="no se admiten tokens en la URL")
+    token = request.cookies.get("osap_support_admin", "")
+    if not token:
+        raise HTTPException(status_code=401, detail="sesión administrativa requerida")
     try:
         _service_authenticator.authenticate_service(token, required_scope=_ADMIN_SCOPE)
     except IdentityError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
-    return HTMLResponse(_PAGE.replace("__TOKEN__", token))
-
+    return HTMLResponse(_PAGE, headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
 
 _service_authenticator: ServiceAuthenticator
 
