@@ -4,10 +4,10 @@ import time
 from types import SimpleNamespace
 
 import jwt
-from fastapi import FastAPI, HTTPException
-from starlette.requests import Request
 import pytest
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from api.routes.admin_web import wire_admin_web_router
 
@@ -72,7 +72,6 @@ def test_support_handoff_rejects_untrusted_origin_and_external_redirect():
         follow_redirects=False,
     )
     assert bad_next.status_code == 400
-
 
 
 def test_support_admin_api_rejects_token_query_parameter():
