@@ -159,20 +159,20 @@ def _payment_for(settings: Settings) -> PaymentProvider:
         raise ProductionWiringError(
             "Production requires OSAP_SUPPORT_PAYPAL_MODE=live; sandbox is forbidden"
         )
-    if not (pcfg.client_id and pcfg.client_secret):
+    if _is_placeholder(pcfg.client_id) or _is_placeholder(pcfg.client_secret):
         raise ProductionWiringError(
             "Production payment provider is not configured: "
-            "OSAP_SUPPORT_PAYPAL_CLIENT_ID/CLIENT_SECRET required (PayPal Live)"
+            "real OSAP_SUPPORT_PAYPAL_CLIENT_ID/CLIENT_SECRET required (PayPal Live)"
         )
-    if not pcfg.webhook_id:
+    if _is_placeholder(pcfg.webhook_id):
         raise ProductionWiringError(
-            "Production PayPal webhook verification requires "
+            "Production PayPal webhook verification requires a real "
             "OSAP_SUPPORT_PAYPAL_WEBHOOK_ID"
         )
     missing_plans = [
         f"{level}_{periodicity}"
         for (level, periodicity), plan_id in pcfg.plan_ids().items()
-        if not plan_id.strip()
+        if _is_placeholder(plan_id)
     ]
     if missing_plans:
         raise ProductionWiringError(
@@ -180,6 +180,20 @@ def _payment_for(settings: Settings) -> PaymentProvider:
             + ", ".join(missing_plans)
         )
     return _paypal_provider(settings)
+
+
+def _is_placeholder(value: str) -> bool:
+    """Empty or obvious template values must never pass production readiness checks."""
+    normalized = value.strip().lower()
+    return not normalized or normalized in {
+        "reemplazar",
+        "replace_me",
+        "change_me",
+        "todo",
+        "placeholder",
+        "your_value",
+        "example",
+    }
 
 
 def _sandbox_configured(settings: Settings) -> bool:
