@@ -125,21 +125,29 @@ def _service_authenticator_for(settings: Settings) -> ServiceAuthenticator:
     # client_credentials y los M2M (membresía/reconocimientos) deben aceptarlos. El
     # authenticator estático queda solo como fallback cuando no hay identidad configurada.
     identity_cfg = settings.identity
-    if not (identity_cfg.jwks_uri and identity_cfg.issuer and identity_cfg.audience):
-        if settings.server.env in _NON_PRODUCTION:
+    if not (
+        identity_cfg.jwks_uri
+        and identity_cfg.issuer
+        and identity_cfg.audience
+        and identity_cfg.service_audience
+    ):
+        if settings.server.env in _NON_PRODUCTION and not (
+            identity_cfg.jwks_uri and identity_cfg.issuer and identity_cfg.audience
+        ):
             return StaticServiceAuthenticator(
                 token=settings.server.dev_service_token,
                 client_id="dev-service",
                 scopes=("support:ingest",),
             )
         raise ProductionWiringError(
-            "Production service authenticator is not configured: "
-            "OSAP_SUPPORT_AUTH_JWKS_URI / ISSUER / AUDIENCE required"
+            "Service authenticator requires "
+            "OSAP_SUPPORT_AUTH_JWKS_URI / ISSUER / AUDIENCE and "
+            "OSAP_SUPPORT_AUTH_SERVICE_AUDIENCE"
         )
     return JwksServiceAuthenticator(
         jwks_uri=identity_cfg.jwks_uri,
         issuer=identity_cfg.issuer,
-        audience=identity_cfg.service_audience or identity_cfg.audience,
+        audience=identity_cfg.service_audience,
         cache_ttl_seconds=identity_cfg.jwks_cache_ttl_seconds,
     )
 
