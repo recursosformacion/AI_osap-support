@@ -62,7 +62,7 @@ class IdentityConfig(BaseSettings):
     jwks_uri: str = ""
     issuer: str = ""
     audience: str = "osap-api"
-    service_audience: str = ""  # service tokens M2M (si vacío: same as audience)
+    service_audience: str = ""  # audience separada obligatoria en production para service/M2M tokens
     service_client_id: str = ""
     service_client_secret: str = ""
     jwks_cache_ttl_seconds: int = 300
