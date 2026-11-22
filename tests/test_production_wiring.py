@@ -109,6 +109,20 @@ class TestProductionFailFast:
         with pytest.raises(ProductionWiringError, match="WEBHOOK_ID"):
             _payment_for(s)
 
+    def test_production_payment_rejects_template_credentials(self) -> None:
+        s = _settings_without_toml("production")
+        _configure_live_paypal(s)
+        s.payment.client_secret = "REEMPLAZAR"
+        with pytest.raises(ProductionWiringError, match="real OSAP_SUPPORT_PAYPAL_CLIENT_ID"):
+            _payment_for(s)
+
+    def test_production_payment_rejects_template_webhook_id(self) -> None:
+        s = _settings_without_toml("production")
+        _configure_live_paypal(s)
+        s.payment.webhook_id = "REEMPLAZAR"
+        with pytest.raises(ProductionWiringError, match="real OSAP_SUPPORT_PAYPAL_WEBHOOK_ID"):
+            _payment_for(s)
+
     def test_production_payment_requires_all_plan_ids(self) -> None:
         s = _settings_without_toml("production")
         _configure_live_paypal(s)
