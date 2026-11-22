@@ -95,3 +95,29 @@ configuración de producción.
 En producción, `OSAP_SUPPORT_ENV` debe ser `production` (es el valor por defecto si no hay
 marcador de entorno). Un `OSAP_SUPPORT_ENV` explícito prevalece sobre `app.env` de
 `config.yaml`. Para desarrollo local, establecer `OSAP_SUPPORT_ENV=development`.
+
+
+## Contrato M2M con osap-auth y osap-api
+
+Los tokens de usuario y de servicio tienen audiencias distintas:
+
+- Access tokens de usuario enviados por el frontend: `aud=osap-api`.
+- Service tokens emitidos para llamadas OSAP API → Support: `aud=osap-support`.
+
+En osap-auth, el service client usado por osap-api debe permitir la audiencia
+`osap-support` y los scopes que consume Support: `api:read` para reconocimientos públicos
+y `support:admin` para operaciones administrativas. Si se usan credenciales de servicio
+separadas, ambos client IDs deben tener su allowlist de audiencia correspondiente.
+
+Los client IDs de `client_credentials` son UUID de registros de service clients de osap-auth,
+no el nombre OIDC `osap-api`. El mismo UUID del cliente que solicita `api:read` debe figurar
+en la allowlist M2M de este servicio cuando se use la ruta de reconocimientos:
+
+```toml
+[[m2m.clients]]
+client_id = "<UUID del service client de osap-api>"
+source = "osap-api"
+projects = ["<slug de proyecto autorizado>"]
+```
+
+Sin esa entrada, `GET /api/v1/m2m/recognitions` responde 403 aunque el JWT sea válido.
