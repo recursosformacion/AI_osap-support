@@ -50,9 +50,11 @@ osap-support-web
 osap-support-worker
 ```
 
-En dev:
+En desarrollo local hay que marcar el entorno explícitamente (sin marcador el servicio
+arranca en modo producción):
 
 ```bash
+export OSAP_SUPPORT_ENV=development
 python -m uvicorn --factory api.main:create_app_from_settings --host 127.0.0.1 --port 8300
 python -m infrastructure.worker --once
 ```
