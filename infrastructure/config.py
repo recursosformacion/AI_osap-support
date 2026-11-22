@@ -101,7 +101,7 @@ class PaymentConfig(BaseSettings):
     client_id: str = ""
     client_secret: str = ""
     webhook_id: str = ""
-    # Plan IDs de PayPal por nivel×periodicidad (se crean en el panel/Sandbox; el
+    # Plan IDs de PayPal por nivel×periodicidad (se crean en el panel Live/Sandbox; el
     # importe/plan lo fija PayPal, nunca el navegador). Niveles reales del dominio:
     # supporter/contributor/voice/founder × monthly/yearly.
     plan_supporter_monthly: str = ""
