@@ -11,11 +11,12 @@ from __future__ import annotations
 import jwt
 import pytest
 
-from api.main import ProductionWiringError, _identity_for, _payment_for
+from api.main import ProductionWiringError, _identity_for, _payment_for, _service_authenticator_for
 from domain.ports.identity import IdentityError
 from infrastructure.config import PROJECT_ROOT, Settings
 from infrastructure.identity.dev_identity_resolver import DevIdentityResolver
 from infrastructure.identity.jwks_identity_resolver import JwksIdentityResolver
+from infrastructure.identity.jwks_service_authenticator import JwksServiceAuthenticator
 from infrastructure.payment.fake_payment_provider import FakePaymentProvider
 from infrastructure.payment.paypal_payment_provider import PayPalPaymentProvider
 
@@ -91,9 +92,27 @@ class TestProductionFailFast:
         s = _settings_without_toml("production")
         s.identity.jwks_uri = "https://auth.osap/auth/.well-known/jwks.json"
         s.identity.issuer = "https://auth.osap"
-        s.identity.audience = "osap-support"
+        s.identity.audience = "osap-api"
         identity = _identity_for(s)
         assert isinstance(identity, JwksIdentityResolver)
+
+    def test_production_service_auth_requires_distinct_audience(self) -> None:
+        s = _settings_without_toml("production")
+        s.identity.jwks_uri = "https://auth.openmusicrepository.com/auth-api/auth/.well-known/jwks.json"
+        s.identity.issuer = "https://auth.openmusicrepository.com"
+        s.identity.audience = "osap-api"
+        with pytest.raises(ProductionWiringError, match="SERVICE_AUDIENCE"):
+            _service_authenticator_for(s)
+
+    def test_production_service_auth_uses_osap_support_audience(self) -> None:
+        s = _settings_without_toml("production")
+        s.identity.jwks_uri = "https://auth.openmusicrepository.com/auth-api/auth/.well-known/jwks.json"
+        s.identity.issuer = "https://auth.openmusicrepository.com"
+        s.identity.audience = "osap-api"
+        s.identity.service_audience = "osap-support"
+        authenticator = _service_authenticator_for(s)
+        assert isinstance(authenticator, JwksServiceAuthenticator)
+        assert authenticator._audience == "osap-support"
 
     def test_production_payment_requires_paypal_creds(self) -> None:
         s = _settings_without_toml("production")
