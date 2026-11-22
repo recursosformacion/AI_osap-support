@@ -51,6 +51,20 @@ def _configure_live_paypal(settings: Settings) -> None:
 
 
 class TestProductionFailFast:
+    def test_explicit_production_env_overrides_development_yaml(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("app:\\n  env: development\\n", encoding="utf-8")
+        monkeypatch.setenv("OSAP_SUPPORT_ENV", "production")
+        settings = Settings(env="development", config_file=config_file, toml_file=False)
+        assert settings.server.env == "production"
+
+    def test_no_environment_marker_defaults_to_production(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OSAP_SUPPORT_ENV", raising=False)
+        settings = Settings(env="production", toml_file=False)
+        assert settings.server.env == "production"
+
     def test_production_identity_fails_fast(self) -> None:
         with pytest.raises(ProductionWiringError) as exc:
             _identity_for(_settings_without_toml("production"))
