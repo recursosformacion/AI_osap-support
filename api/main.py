@@ -120,10 +120,8 @@ def _identity_for(settings: Settings) -> IdentityResolver:
 
 
 def _service_authenticator_for(settings: Settings) -> ServiceAuthenticator:
-    # Si hay identidad configurada (jwks/issuer/audience), los service tokens se validan
-    # SIEMPRE contra el JWKS real (también en dev): osap-api emite tokens reales por
-    # client_credentials y los M2M (membresía/reconocimientos) deben aceptarlos. El
-    # authenticator estático queda solo como fallback cuando no hay identidad configurada.
+    # Los service tokens usan una audiencia separada de los access tokens de usuario:
+    # aud=osap-support. En production no se permite heredar por defecto aud=osap-api.
     identity_cfg = settings.identity
     if not (
         identity_cfg.jwks_uri
