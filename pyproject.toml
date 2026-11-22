@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "osap-support"
 version = "6.4.0"
 description = "Servicio de apoyo/membresía del ecosistema OSAP (relación de apoyo, economía no sensible y comunicaciones)."
-license = {text = "AGPL-3.0-only"}
+license = {text = "GPL-3.0-only"}
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.110",
