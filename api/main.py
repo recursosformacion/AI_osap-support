@@ -152,17 +152,32 @@ def _payment_for(settings: Settings) -> PaymentProvider:
         if pcfg.dev_real and _sandbox_configured(settings):
             return _paypal_provider(settings)
         return FakePaymentProvider()
-    # production: SOLO PayPal real. Sin credenciales/configuración el arranque falla.
-    pcfg = settings.payment
-    if not (pcfg.mode in ("sandbox", "live") and pcfg.client_id and pcfg.client_secret):
+    # Production must never accept Sandbox credentials or start without a verifiable
+    # webhook. Otherwise subscriptions could be created but their lifecycle events
+    # would be rejected, leaving membership state inconsistent.
+    if pcfg.mode != "live":
+        raise ProductionWiringError(
+            "Production requires OSAP_SUPPORT_PAYPAL_MODE=live; sandbox is forbidden"
+        )
+    if not (pcfg.client_id and pcfg.client_secret):
         raise ProductionWiringError(
             "Production payment provider is not configured: "
-            "OSAP_SUPPORT_PAYPAL_MODE/CLIENT_ID/CLIENT_SECRET required (PayPal)"
+            "OSAP_SUPPORT_PAYPAL_CLIENT_ID/CLIENT_SECRET required (PayPal Live)"
         )
-    if not any(pcfg.plan_ids().values()):
+    if not pcfg.webhook_id:
         raise ProductionWiringError(
-            "Production payment provider is missing PayPal plan_ids: "
-            "OSAP_SUPPORT_PAYPAL_PLAN_*_MONTHLY/YEARLY required"
+            "Production PayPal webhook verification requires "
+            "OSAP_SUPPORT_PAYPAL_WEBHOOK_ID"
+        )
+    missing_plans = [
+        f"{level}_{periodicity}"
+        for (level, periodicity), plan_id in pcfg.plan_ids().items()
+        if not plan_id.strip()
+    ]
+    if missing_plans:
+        raise ProductionWiringError(
+            "Production PayPal configuration is missing plan IDs: "
+            + ", ".join(missing_plans)
         )
     return _paypal_provider(settings)
 
