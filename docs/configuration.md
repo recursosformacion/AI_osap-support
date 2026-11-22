@@ -27,7 +27,7 @@ La BD `osap_support` usa el mismo usuario/credenciales del ecosistema (mismos va
 
 | Variable | Obligatoria | Descripción |
 |---|---|---|
-| `OSAP_SUPPORT_ENV` | sí | `development`/`test`/`production`. En `production` los fakes están prohibidos (fail-fast). |
+| `OSAP_SUPPORT_ENV` | sí | `development`/`test`/`production`. En `production` los fakes y PayPal Sandbox están prohibidos (fail-fast). |
 | `OSAP_SUPPORT_SERVER_HOST` | no | 127.0.0.1 |
 | `OSAP_SUPPORT_SERVER_PORT` | no | 8300 |
 | `OSAP_SUPPORT_CORS_ORIGINS` | no | Solo si frontend y support son dominios distintos; lista separada por comas. Nunca `*` con credenciales. |
@@ -55,7 +55,7 @@ La BD `osap_support` usa el mismo usuario/credenciales del ecosistema (mismos va
 
 | Variable | Obligatoria en production |
 |---|---|
-| `OSAP_SUPPORT_PAYPAL_MODE` | sí (`sandbox`/`live`) |
+| `OSAP_SUPPORT_PAYPAL_MODE` | sí (`live` exclusivamente) |
 | `OSAP_SUPPORT_PAYPAL_CLIENT_ID` | sí |
 | `OSAP_SUPPORT_PAYPAL_CLIENT_SECRET` | sí |
 | `OSAP_SUPPORT_PAYPAL_WEBHOOK_ID` | sí (verificación de firma) |
@@ -87,5 +87,10 @@ falla al arrancar.
 ## Fail-fast
 
 En `production` el arranque web falla si falta: JWKS/issuer/audience, credenciales
-PayPal o plan_ids. El worker falla si falta SMTP real. Ningún fake es seleccionable por
+PayPal Live, webhook verificable y los ocho plan IDs Live reales. El worker falla si falta SMTP real. Ningún fake es seleccionable por
 configuración de producción.
+
+
+En producción, `OSAP_SUPPORT_ENV` debe ser `production` (es el valor por defecto si no hay
+marcador de entorno). Un `OSAP_SUPPORT_ENV` explícito prevalece sobre `app.env` de
+`config.yaml`. Para desarrollo local, establecer `OSAP_SUPPORT_ENV=development`.
