@@ -434,6 +434,9 @@ def _apply_server_env(server: ServerConfig) -> None:
     value = os.environ.get("OSAP_SUPPORT_SERVER_PORT")
     if value:
         server.port = int(value)
+    value = os.environ.get("OSAP_SUPPORT_ENV")
+    if value:
+        server.env = value
     value = os.environ.get("OSAP_SUPPORT_SERVER_ENV")
     if value:
         server.env = value
