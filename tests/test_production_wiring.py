@@ -35,6 +35,21 @@ def _settings_without_toml(env: str) -> Settings:
     return s
 
 
+def _configure_live_paypal(settings: Settings) -> None:
+    settings.payment.mode = "live"
+    settings.payment.client_id = "cid"
+    settings.payment.client_secret = "csec"
+    settings.payment.webhook_id = "webhook-live"
+    settings.payment.plan_supporter_monthly = "P-SM"
+    settings.payment.plan_supporter_yearly = "P-SY"
+    settings.payment.plan_contributor_monthly = "P-CM"
+    settings.payment.plan_contributor_yearly = "P-CY"
+    settings.payment.plan_voice_monthly = "P-VM"
+    settings.payment.plan_voice_yearly = "P-VY"
+    settings.payment.plan_founder_monthly = "P-FM"
+    settings.payment.plan_founder_yearly = "P-FY"
+
+
 class TestProductionFailFast:
     def test_production_identity_fails_fast(self) -> None:
         with pytest.raises(ProductionWiringError) as exc:
@@ -66,29 +81,38 @@ class TestProductionFailFast:
 
     def test_production_payment_requires_paypal_creds(self) -> None:
         s = _settings_without_toml("production")
-        s.payment.mode = "sandbox"
+        s.payment.mode = "live"
         s.payment.client_id = ""
         s.payment.client_secret = ""
         with pytest.raises(ProductionWiringError):
             _payment_for(s)
 
-    def test_production_payment_uses_paypal_when_configured(self) -> None:
+    def test_production_payment_uses_paypal_when_fully_configured(self) -> None:
         s = _settings_without_toml("production")
-        s.payment.mode = "sandbox"
-        s.payment.client_id = "cid"
-        s.payment.client_secret = "csec"
-        s.payment.plan_supporter_monthly = "P-MONTHLY-1"
+        _configure_live_paypal(s)
         provider = _payment_for(s)
         assert isinstance(provider, PayPalPaymentProvider)
 
-    def test_production_payment_requires_plan_ids(self) -> None:
+    def test_production_payment_rejects_sandbox(self) -> None:
         s = _settings_without_toml("production")
+        _configure_live_paypal(s)
         s.payment.mode = "sandbox"
-        s.payment.client_id = "cid"
-        s.payment.client_secret = "csec"
-        with pytest.raises(ProductionWiringError) as exc:
+        with pytest.raises(ProductionWiringError, match="MODE=live"):
             _payment_for(s)
-        assert "plan_ids" in str(exc.value)
+
+    def test_production_payment_requires_webhook_id(self) -> None:
+        s = _settings_without_toml("production")
+        _configure_live_paypal(s)
+        s.payment.webhook_id = ""
+        with pytest.raises(ProductionWiringError, match="WEBHOOK_ID"):
+            _payment_for(s)
+
+    def test_production_payment_requires_all_plan_ids(self) -> None:
+        s = _settings_without_toml("production")
+        _configure_live_paypal(s)
+        s.payment.plan_founder_yearly = ""
+        with pytest.raises(ProductionWiringError, match="founder_yearly"):
+            _payment_for(s)
 
 
 class TestSettingsDependOnOsapToml:
@@ -110,7 +134,14 @@ class TestSettingsDependOnOsapToml:
         # El bloque [paypal] de osap.toml alimenta la config de PayPal.
         assert s.payment.mode in ("sandbox", "live")
         # Si hay credenciales/plan reales, el wiring production produce PayPal real.
-        if s.payment.client_id and s.payment.client_secret and any(s.payment.plan_ids().values()):
+        all_plans_configured = all(s.payment.plan_ids().values())
+        if (
+            s.payment.mode == "live"
+            and s.payment.client_id
+            and s.payment.client_secret
+            and s.payment.webhook_id
+            and all_plans_configured
+        ):
             assert isinstance(_payment_for(s), PayPalPaymentProvider)
 
     def test_env_overrides_toml(self, monkeypatch: pytest.MonkeyPatch) -> None:
