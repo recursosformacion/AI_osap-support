@@ -57,11 +57,13 @@ class TestProductionFailFast:
         assert "Production identity provider is not configured" in str(exc.value)
         assert "OSAP_SUPPORT_AUTH_JWKS_URI" in str(exc.value)
 
-    def test_production_payment_fails_fast(self) -> None:
+    def test_production_payment_fails_fast_without_credentials(self) -> None:
+        s = _settings_without_toml("production")
+        s.payment.mode = "live"
         with pytest.raises(ProductionWiringError) as exc:
-            _payment_for(_settings_without_toml("production"))
+            _payment_for(s)
         assert "Production payment provider is not configured" in str(exc.value)
-        assert "OSAP_SUPPORT_PAYPAL_MODE" in str(exc.value)
+        assert "OSAP_SUPPORT_PAYPAL_CLIENT_ID/CLIENT_SECRET" in str(exc.value)
 
     def test_production_identity_requires_real_config(self) -> None:
         # Config parcial (solo jwks_uri, sin issuer) sigue siendo fail-fast.
