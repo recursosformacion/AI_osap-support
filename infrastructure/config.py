@@ -384,7 +384,8 @@ class Settings:
         app = data.get("app", {})
         server = data.get("server", {})
         env = app.get("env")
-        if isinstance(env, str):
+        # Explicit OSAP_SUPPORT_ENV always wins over the lower-precedence YAML layer.
+        if isinstance(env, str) and os.environ.get("OSAP_SUPPORT_ENV") is None:
             self.server.env = env
         debug = app.get("debug")
         if debug is not None:
@@ -460,9 +461,9 @@ def _coerce_typed(key: str, value: Any, conv: Any) -> Any:
 
 @lru_cache
 def load_settings() -> Settings:
-    # Runtime (web/worker): osap.toml del servicio (dev) o desplegado como osap.toml en
-    # producción. `config.yaml` (capa osap-auth) queda como capa menor, si existe.
-    settings = Settings(env=os.environ.get("OSAP_SUPPORT_ENV", "development"))
+    # Runtime (web/worker): producción por defecto (fail-closed). Desarrollo requiere
+    # OSAP_SUPPORT_ENV=development o app.env=development en un config.yaml local.
+    settings = Settings(env=os.environ.get("OSAP_SUPPORT_ENV", "production"))
     yaml_path = settings.config_yaml()
     if yaml_path is not None:
         settings = Settings(config_file=yaml_path)
