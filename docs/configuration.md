@@ -48,7 +48,8 @@ La BD `osap_support` usa el mismo usuario/credenciales del ecosistema (mismos va
 |---|---|
 | `OSAP_SUPPORT_AUTH_JWKS_URI` | sí |
 | `OSAP_SUPPORT_AUTH_ISSUER` | sí |
-| `OSAP_SUPPORT_AUTH_AUDIENCE` | sí (`osap-support`) |
+| `OSAP_SUPPORT_AUTH_AUDIENCE` | sí (`osap-api`, user access tokens) |
+| `OSAP_SUPPORT_AUTH_SERVICE_AUDIENCE` | sí (`osap-support`, service/M2M tokens) |
 | `OSAP_SUPPORT_AUTH_JWKS_CACHE_TTL_SECONDS` | no (300) |
 
 ## PayPal
