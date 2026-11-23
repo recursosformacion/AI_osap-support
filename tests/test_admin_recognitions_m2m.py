@@ -46,8 +46,8 @@ def test_admin_recognitions_accepts_m2m_service_with_exact_scope(monkeypatch):
 
 def test_admin_recognitions_rejects_service_without_admin_scope(monkeypatch):
     service_auth = _ServiceAuth(error=IdentityError("scope support:admin requerido"))
-    monkeypatch.setattr(admin_recognitions, "_identity", _UserIdentity(error=IdentityError("not a user token")))
-    monkeypatch.setattr(admin_recognitions, "_service_auth", service_auth)
+    monkeypatch.setattr(admin_recognitions, "_identity", _UserIdentity(error=IdentityError("not a user token")), raising=False)
+    monkeypatch.setattr(admin_recognitions, "_service_auth", service_auth, raising=False)
 
     with pytest.raises(HTTPException) as exc:
         admin_recognitions._require_admin("signed-service-token")
@@ -61,6 +61,7 @@ def test_admin_recognitions_keeps_user_role_authorization(monkeypatch):
         admin_recognitions,
         "_identity",
         _UserIdentity(principal=IdentityPrincipal(user_id="user-1", roles=("support:admin",))),
+        raising=False,
     )
     monkeypatch.setattr(admin_recognitions, "_service_auth", _ServiceAuth(), raising=False)
 
@@ -72,6 +73,7 @@ def test_admin_recognitions_does_not_fallback_when_user_lacks_role(monkeypatch):
         admin_recognitions,
         "_identity",
         _UserIdentity(principal=IdentityPrincipal(user_id="user-1", roles=("member",))),
+        raising=False,
     )
     monkeypatch.setattr(
         admin_recognitions,
