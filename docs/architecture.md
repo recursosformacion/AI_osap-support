@@ -20,6 +20,22 @@ browser (token Bearer de osap-auth)
 → user_id = JWT.sub
 ```
 
+
+### Administración M2M
+
+```
+osap-api
+→ Auth client_credentials (UUID de service_clients)
+→ service token firmado por osap-auth (aud=osap-support, scope=support:admin)
+→ POST/GET /api/v1/admin/recognitions
+→ JwksServiceAuthenticator (JWKS, issuer, audience, token_use=service y scope)
+```
+
+Las rutas administrativas aceptan dos identidades diferenciadas: usuarios cuyo JWT lleva
+el rol `support:admin`, o service tokens cuyo scope incluye `support:admin`. Un token de
+usuario sin ese rol recibe 403; un service token sin scope también recibe 403. Los service
+tokens no se interpretan como usuarios ni pasan por `IdentityResolver`.
+
 ### Donación
 
 ```
