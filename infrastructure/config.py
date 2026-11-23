@@ -61,7 +61,7 @@ class IdentityConfig(BaseSettings):
     # osap-auth (ver api.main._identity_for); nunca se usan placeholders.
     jwks_uri: str = ""
     issuer: str = ""
-    audience: str = "osap-api"
+    audience: str = "osap-support"
     service_audience: str = ""  # audience separada obligatoria en production para service/M2M tokens
     service_client_id: str = ""
     service_client_secret: str = ""
