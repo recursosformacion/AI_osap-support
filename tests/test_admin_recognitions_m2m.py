@@ -35,8 +35,8 @@ class _ServiceAuth:
 
 def test_admin_recognitions_accepts_m2m_service_with_exact_scope(monkeypatch):
     service_auth = _ServiceAuth(service=ServiceIdentity(client_id="service-123", scopes=("support:admin",)))
-    monkeypatch.setattr(admin_recognitions, "_identity", _UserIdentity(error=IdentityError("not a user token")))
-    monkeypatch.setattr(admin_recognitions, "_service_auth", service_auth)
+    monkeypatch.setattr(admin_recognitions, "_identity", _UserIdentity(error=IdentityError("not a user token")), raising=False)
+    monkeypatch.setattr(admin_recognitions, "_service_auth", service_auth, raising=False)
 
     result = admin_recognitions._require_admin("signed-service-token")
 
@@ -62,7 +62,7 @@ def test_admin_recognitions_keeps_user_role_authorization(monkeypatch):
         "_identity",
         _UserIdentity(principal=IdentityPrincipal(user_id="user-1", roles=("support:admin",))),
     )
-    monkeypatch.setattr(admin_recognitions, "_service_auth", _ServiceAuth())
+    monkeypatch.setattr(admin_recognitions, "_service_auth", _ServiceAuth(), raising=False)
 
     assert admin_recognitions._require_admin("signed-user-token") == "user-1"
 
@@ -77,6 +77,7 @@ def test_admin_recognitions_does_not_fallback_when_user_lacks_role(monkeypatch):
         admin_recognitions,
         "_service_auth",
         _ServiceAuth(error=AssertionError("no debe probar el service token")),
+        raising=False,
     )
 
     with pytest.raises(HTTPException) as exc:
