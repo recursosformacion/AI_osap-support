@@ -115,6 +115,7 @@ def test_membership_me_with_membership(api_client_with_membership: TestClient) -
     body = resp.json()
     assert body["status"] == "active"
     assert body["level"] == "voice"
+    assert body["is_subscriber"] is True
     assert body["is_founder"] is False
 
 
@@ -126,6 +127,7 @@ def test_membership_me_without_membership_returns_200_empty_typed(api_client: Te
     assert body == {
         "status": None,
         "level": None,
+        "is_subscriber": False,
         "started_at": None,
         "next_renewal_at": None,
         "is_founder": False,

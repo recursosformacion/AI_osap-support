@@ -113,7 +113,7 @@ def test_paypal_parse_maps_plan_and_dates() -> None:
         mode="sandbox",
         client_id="x",
         client_secret="y",
-        plan_ids={("supporter", "monthly"): PLAN_MONTHLY},
+        plan_ids={"monthly": PLAN_MONTHLY},
     )
     payload = {
         "id": "evt-plan",
@@ -128,7 +128,6 @@ def test_paypal_parse_maps_plan_and_dates() -> None:
     }
     event = provider.parse_webhook(payload)
     assert event.metadata["plan_id"] == PLAN_MONTHLY
-    assert event.metadata["level"] == "supporter"
     assert event.metadata["periodicity"] == "monthly"
     assert event.metadata["subscription_id"] == SUB_ID
     assert event.metadata["start_time"] == "2026-09-06T10:00:00Z"

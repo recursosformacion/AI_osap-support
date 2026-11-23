@@ -49,17 +49,11 @@ def _minor_to_decimal(amount_minor: int, currency: str) -> str:
     return f"{amount_minor // 100}.{amount_minor % 100:02d}"
 
 
-# Mapas de niveles/periodicidad → plan_id configurado por entorno (panel PayPal).
-# Se inyectan desde configuración; sin plan_id la membresía falla explícito.
+# Mapa periodicidad → variable de entorno con el plan_id de PayPal (panel).
+# El cobro depende SOLO de la periodicidad (mensual/anual), no del rol.
 _PLAN_KEYS = {
-    ("supporter", "monthly"): "OSAP_SUPPORT_PAYPAL_PLAN_SUPPORTER_MONTHLY",
-    ("supporter", "yearly"): "OSAP_SUPPORT_PAYPAL_PLAN_SUPPORTER_YEARLY",
-    ("contributor", "monthly"): "OSAP_SUPPORT_PAYPAL_PLAN_CONTRIBUTOR_MONTHLY",
-    ("contributor", "yearly"): "OSAP_SUPPORT_PAYPAL_PLAN_CONTRIBUTOR_YEARLY",
-    ("voice", "monthly"): "OSAP_SUPPORT_PAYPAL_PLAN_VOICE_MONTHLY",
-    ("voice", "yearly"): "OSAP_SUPPORT_PAYPAL_PLAN_VOICE_YEARLY",
-    ("founder", "monthly"): "OSAP_SUPPORT_PAYPAL_PLAN_FOUNDER_MONTHLY",
-    ("founder", "yearly"): "OSAP_SUPPORT_PAYPAL_PLAN_FOUNDER_YEARLY",
+    "monthly": "OSAP_SUPPORT_PAYPAL_PLAN_MONTHLY",
+    "yearly": "OSAP_SUPPORT_PAYPAL_PLAN_YEARLY",
 }
 
 
@@ -79,7 +73,7 @@ class PayPalPaymentProvider(BasePaymentProvider):
         webhook_id: str = "",
         return_url: str = "https://app.openmusicrepository.com/support/return",
         cancel_url: str = "https://app.openmusicrepository.com/support",
-        plan_ids: dict[tuple[str, str], str] | None = None,
+        plan_ids: dict[str, str] | None = None,
         http_client: httpx.Client | None = None,
     ) -> None:
         if mode not in _API_BASE:
@@ -98,15 +92,14 @@ class PayPalPaymentProvider(BasePaymentProvider):
         self._http = http_client or httpx.Client(timeout=20.0)
         self._access_token: str | None = None
         self._token_expires_at: float = 0.0
-        # Inversa plan_id → (level, periodicity): el webhook solo trae plan_id y el
-        # binding no debe quedarse en supporter/monthly por defecto.
-        self._plan_level_periodicity: dict[str, tuple[str, str]] = {
-            plan_id: key for key, plan_id in self._plan_ids.items() if plan_id
+        # Inversa plan_id → periodicidad: el webhook solo trae plan_id.
+        self._plan_periodicity: dict[str, str] = {
+            plan_id: periodicity for periodicity, plan_id in self._plan_ids.items() if plan_id
         }
 
-    def resolve_plan(self, plan_id: str) -> tuple[str, str] | None:
-        """plan_id PayPal → (level, periodicity) de la configuración, si existe."""
-        return self._plan_level_periodicity.get(plan_id)
+    def resolve_plan(self, plan_id: str) -> str | None:
+        """plan_id PayPal → periodicidad (monthly|yearly) de la configuración."""
+        return self._plan_periodicity.get(plan_id)
 
     # -- internals ------------------------------------------------------------
 
@@ -168,9 +161,9 @@ class PayPalPaymentProvider(BasePaymentProvider):
             if amount_minor <= 0:
                 raise PayPalError("amount_minor debe ser positivo")
             return self._create_order(user_id, amount_minor, currency, return_url)
-        if level is None or periodicity is None:
-            raise PayPalError("level y periodicity son obligatorios para membresía")
-        return self._create_subscription(user_id, level, periodicity, return_url)
+        if periodicity is None:
+            raise PayPalError("periodicity es obligatorio para membresía (monthly|yearly)")
+        return self._create_subscription(user_id, periodicity, return_url)
 
     def resolve_customer(self, *, user_id: str) -> str:
         # PayPal no tiene "customer" canónico para Orders/Subscriptions públicas;
@@ -206,7 +199,7 @@ class PayPalPaymentProvider(BasePaymentProvider):
         resource: dict[Any, Any] = raw_resource if isinstance(raw_resource, dict) else {}
         raw_payload = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         plan_id = _extract_plan_id(resource)
-        resolved = self.resolve_plan(plan_id) if plan_id else None
+        periodicity = self.resolve_plan(plan_id) if plan_id else None
         meta = {
             "resource": resource,
             "plan_id": plan_id,
@@ -219,11 +212,9 @@ class PayPalPaymentProvider(BasePaymentProvider):
             "start_time": _extract_start_time(resource),
             "next_billing_time": _extract_next_billing_time(resource),
         }
-        # plan_id → (level, periodicity): NUNCA defaults supporter/monthly si el plan
-        # de la suscripción real está en la configuración (binding inequívoco).
-        if resolved is not None:
-            meta["level"] = resolved[0]
-            meta["periodicity"] = resolved[1]
+        # plan_id → periodicidad (monthly|yearly). El ROL no se deriva del plan.
+        if periodicity is not None:
+            meta["periodicity"] = periodicity
         return PaymentProviderEvent(
             provider="paypal",
             provider_event_id=event_id,
@@ -307,14 +298,13 @@ class PayPalPaymentProvider(BasePaymentProvider):
         )
 
     def _create_subscription(
-        self, user_id: str, level: str, periodicity: str, return_url: str
+        self, user_id: str, periodicity: str, return_url: str
     ) -> CheckoutSession:
-        plan_key = (level, periodicity)
-        plan_id = self._plan_ids.get(plan_key) or ""
+        plan_id = self._plan_ids.get(periodicity) or ""
         if not plan_id:
-            env = _PLAN_KEYS.get(plan_key)
+            env = _PLAN_KEYS.get(periodicity)
             raise PayPalError(
-                f"plan_id PayPal no configurado para {level}/{periodicity}"
+                f"plan_id PayPal no configurado para periodicidad {periodicity}"
                 + (f" (env {env})" if env else "")
             )
         body = {

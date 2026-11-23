@@ -39,7 +39,6 @@ def test_application_depends_on_port_not_provider() -> None:
     use_case = CheckoutMembershipUseCase(provider)
     session = use_case.execute(
         user_id="uuid-1",
-        level="supporter",
         periodicity="monthly",
         return_url="https://osap-app/return",
     )
@@ -56,14 +55,14 @@ def test_membership_and_donation_checkouts_are_distinct() -> None:
     # ADR-004: membership (recurrente) y donation (puntual) usan modos distintos.
     provider = _fake()
     membership = CheckoutMembershipUseCase(provider).execute(
-        user_id="uuid-1", level="contributor", periodicity="yearly", return_url="/return"
+        user_id="uuid-1", periodicity="yearly", return_url="/return"
     )
     donation = CheckoutDonationUseCase(provider).execute(
         user_id="uuid-1", amount_minor=500, currency="EUR", return_url="/return"
     )
     assert membership.mode == PaymentMode.MEMBERSHIP
     assert donation.mode == PaymentMode.DONATION
-    assert "/contributor/yearly" in membership.checkout_url
+    assert "/yearly" in membership.checkout_url
 
 
 def test_resolve_customer_is_stable() -> None:

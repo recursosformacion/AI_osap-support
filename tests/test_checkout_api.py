@@ -96,25 +96,27 @@ def test_checkout_donation_returns_real_checkout_url(client: TestClient) -> None
 def test_checkout_membership_requires_auth(client: TestClient) -> None:
     resp = client.post(
         "/api/v1/checkouts/membership",
-        json={"level": "supporter", "periodicity": "monthly", "return_url": "/return"},
+        json={"periodicity": "monthly", "return_url": "/return"},
     )
     assert resp.status_code == 401
 
 
-def test_checkout_membership_unsupported_level(client: TestClient) -> None:
+def test_checkout_membership_ignores_level_field(client: TestClient) -> None:
+    # `level` se acepta por compatibilidad pero se IGNORA (el rol no fija el plan).
     resp = client.post(
         "/api/v1/checkouts/membership",
         headers={"Authorization": TOKEN},
-        json={"level": "diamond", "periodicity": "monthly", "return_url": "/return"},
+        json={"level": "voice", "periodicity": "monthly", "return_url": "/return"},
     )
-    assert resp.status_code == 422
+    assert resp.status_code == 200
+    assert resp.json()["mode"] == "membership"
 
 
 def test_checkout_membership_unsupported_periodicity(client: TestClient) -> None:
     resp = client.post(
         "/api/v1/checkouts/membership",
         headers={"Authorization": TOKEN},
-        json={"level": "supporter", "periodicity": "weekly", "return_url": "/return"},
+        json={"periodicity": "weekly", "return_url": "/return"},
     )
     assert resp.status_code == 422
 
@@ -125,7 +127,6 @@ def test_checkout_membership_plan_id_not_accepted_from_client(client: TestClient
         "/api/v1/checkouts/membership",
         headers={"Authorization": TOKEN},
         json={
-            "level": "supporter",
             "periodicity": "monthly",
             "return_url": "/return",
             "plan_id": "P-HACKED",
@@ -138,13 +139,13 @@ def test_checkout_membership_returns_real_checkout_url(client: TestClient) -> No
     resp = client.post(
         "/api/v1/checkouts/membership",
         headers={"Authorization": TOKEN},
-        json={"level": "voice", "periodicity": "yearly", "return_url": "/return"},
+        json={"periodicity": "yearly", "return_url": "/return"},
     )
     assert resp.status_code == 200
     body = resp.json()
     assert body["mode"] == "membership"
     assert body["checkout_url"].startswith("https://")
-    assert body["checkout_url"].endswith("/voice/yearly")
+    assert body["checkout_url"].endswith("/yearly")
     assert body["provider_session_id"]
 
 

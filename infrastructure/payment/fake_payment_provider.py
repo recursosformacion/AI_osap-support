@@ -37,7 +37,7 @@ class FakePaymentProvider(BasePaymentProvider):
     ) -> CheckoutSession:
         session = CheckoutSession(
             checkout_url=(
-                f"https://{self.provider_id}-pay/{user_id}/{mode.value}/{level}/{periodicity}"
+                f"https://{self.provider_id}-pay/{user_id}/{mode.value}/{periodicity}"
                 if mode == PaymentMode.MEMBERSHIP
                 else f"https://{self.provider_id}-pay/{user_id}/{mode.value}"
             ),

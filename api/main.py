@@ -176,8 +176,8 @@ def _payment_for(settings: Settings) -> PaymentProvider:
             "OSAP_SUPPORT_PAYPAL_WEBHOOK_ID"
         )
     missing_plans = [
-        f"{level}_{periodicity}"
-        for (level, periodicity), plan_id in pcfg.plan_ids().items()
+        periodicity
+        for periodicity, plan_id in pcfg.plan_ids().items()
         if _is_placeholder(plan_id)
     ]
     if missing_plans:

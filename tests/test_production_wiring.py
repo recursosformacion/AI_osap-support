@@ -41,14 +41,8 @@ def _configure_live_paypal(settings: Settings) -> None:
     settings.payment.client_id = "cid"
     settings.payment.client_secret = "csec"
     settings.payment.webhook_id = "webhook-live"
-    settings.payment.plan_supporter_monthly = "P-SM"
-    settings.payment.plan_supporter_yearly = "P-SY"
-    settings.payment.plan_contributor_monthly = "P-CM"
-    settings.payment.plan_contributor_yearly = "P-CY"
-    settings.payment.plan_voice_monthly = "P-VM"
-    settings.payment.plan_voice_yearly = "P-VY"
-    settings.payment.plan_founder_monthly = "P-FM"
-    settings.payment.plan_founder_yearly = "P-FY"
+    settings.payment.plan_monthly = "P-M"
+    settings.payment.plan_yearly = "P-Y"
 
 
 class TestProductionFailFast:
@@ -159,8 +153,8 @@ class TestProductionFailFast:
     def test_production_payment_requires_all_plan_ids(self) -> None:
         s = _settings_without_toml("production")
         _configure_live_paypal(s)
-        s.payment.plan_founder_yearly = ""
-        with pytest.raises(ProductionWiringError, match="founder_yearly"):
+        s.payment.plan_yearly = ""
+        with pytest.raises(ProductionWiringError, match="yearly"):
             _payment_for(s)
 
 
@@ -244,7 +238,7 @@ class TestDevAndTestUseFakes:
         s.payment.mode = "sandbox"
         s.payment.client_id = "cid"
         s.payment.client_secret = "csec"
-        s.payment.plan_supporter_monthly = "P-MONTHLY-1"
+        s.payment.plan_monthly = "P-MONTHLY-1"
         s.payment.dev_real = True
         provider = _payment_for(s)
         assert isinstance(provider, PayPalPaymentProvider)

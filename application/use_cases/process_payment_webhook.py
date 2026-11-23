@@ -278,10 +278,13 @@ class ProcessPaymentWebhookUseCase:
         subscription_id = _s(meta.get("subscription_id")) or event.provider_event_id
         amount_minor = _i(meta.get("amount_minor"))
         currency = _s(meta.get("currency")) or "EUR"
-        # plan_id → level/periodicity resuelto por el provider (nunca defaults si el
-        # plan real está configurado).
+        # El plan determina SOLO la periodicidad. El rol es independiente del cobro:
+        # se conserva el rol previo del usuario si existe; si no, un rol por defecto.
+        # NUNCA se deriva el rol del plan comprado.
         periodicity = Periodicity(_s(meta.get("periodicity")) or "monthly")
-        level = MembershipLevel(_s(meta.get("level")) or "supporter")
+        user_id = event.user_id or ""
+        prior = self._memberships.list_by_user(user_id)
+        level = prior[0].level if prior else MembershipLevel.SUPPORTER
         started = _parse_iso(_s(meta.get("start_time"))) or event.received_at
         next_at = _parse_iso(_s(meta.get("next_billing_time")))
         # PayPal BILLING.SUBSCRIPTION.ACTIVATED = suscripción YA activa (aprobada):

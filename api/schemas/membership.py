@@ -18,6 +18,7 @@ class MembershipMeResponse(BaseModel):
 
     status: str | None = None
     level: str | None = None
+    is_subscriber: bool = False
     started_at: datetime | None = None
     next_renewal_at: datetime | None = None
     is_founder: bool = False

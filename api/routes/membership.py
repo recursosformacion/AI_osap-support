@@ -39,6 +39,7 @@ def membership_me(
     return MembershipMeResponse(
         status=m.status.value,
         level=m.level.value,
+        is_subscriber=m.status.value in ("active", "pending", "past_due"),
         started_at=m.started_at,
         next_renewal_at=m.next_renewal_at,
         is_founder=m.is_founder,

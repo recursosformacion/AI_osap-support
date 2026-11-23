@@ -101,28 +101,18 @@ class PaymentConfig(BaseSettings):
     client_id: str = ""
     client_secret: str = ""
     webhook_id: str = ""
-    # Plan IDs de PayPal por nivel×periodicidad (se crean en el panel Live/Sandbox; el
-    # importe/plan lo fija PayPal, nunca el navegador). Niveles reales del dominio:
-    # supporter/contributor/voice/founder × monthly/yearly.
-    plan_supporter_monthly: str = ""
-    plan_supporter_yearly: str = ""
-    plan_contributor_monthly: str = ""
-    plan_contributor_yearly: str = ""
-    plan_voice_monthly: str = ""
-    plan_voice_yearly: str = ""
-    plan_founder_monthly: str = ""
-    plan_founder_yearly: str = ""
+    # El plan de cobro depende SOLO de la periodicidad (mensual/anual). El rol/nivel
+    # (supporter/contributor/voice/founder) es independiente del cobro: cualquier rol
+    # puede ser suscriptor o no. `default_role` es solo el rol por defecto de una
+    # suscripción nueva sin rol previo; NUNCA lo determina el plan.
+    plan_monthly: str = ""
+    plan_yearly: str = ""
+    default_role: str = "supporter"
 
-    def plan_ids(self) -> dict[tuple[str, str], str]:
+    def plan_ids(self) -> dict[str, str]:
         return {
-            ("supporter", "monthly"): self.plan_supporter_monthly,
-            ("supporter", "yearly"): self.plan_supporter_yearly,
-            ("contributor", "monthly"): self.plan_contributor_monthly,
-            ("contributor", "yearly"): self.plan_contributor_yearly,
-            ("voice", "monthly"): self.plan_voice_monthly,
-            ("voice", "yearly"): self.plan_voice_yearly,
-            ("founder", "monthly"): self.plan_founder_monthly,
-            ("founder", "yearly"): self.plan_founder_yearly,
+            "monthly": self.plan_monthly,
+            "yearly": self.plan_yearly,
         }
 
 
@@ -211,14 +201,9 @@ _TOML_TO_ENV: dict[str, list[tuple[str, str, Any]]] = {
         ("client_id", "OSAP_SUPPORT_PAYPAL_CLIENT_ID", str),
         ("client_secret", "OSAP_SUPPORT_PAYPAL_CLIENT_SECRET", str),
         ("webhook_id", "OSAP_SUPPORT_PAYPAL_WEBHOOK_ID", str),
-        ("plan_supporter_monthly", "OSAP_SUPPORT_PAYPAL_PLAN_SUPPORTER_MONTHLY", str),
-        ("plan_supporter_yearly", "OSAP_SUPPORT_PAYPAL_PLAN_SUPPORTER_YEARLY", str),
-        ("plan_contributor_monthly", "OSAP_SUPPORT_PAYPAL_PLAN_CONTRIBUTOR_MONTHLY", str),
-        ("plan_contributor_yearly", "OSAP_SUPPORT_PAYPAL_PLAN_CONTRIBUTOR_YEARLY", str),
-        ("plan_voice_monthly", "OSAP_SUPPORT_PAYPAL_PLAN_VOICE_MONTHLY", str),
-        ("plan_voice_yearly", "OSAP_SUPPORT_PAYPAL_PLAN_VOICE_YEARLY", str),
-        ("plan_founder_monthly", "OSAP_SUPPORT_PAYPAL_PLAN_FOUNDER_MONTHLY", str),
-        ("plan_founder_yearly", "OSAP_SUPPORT_PAYPAL_PLAN_FOUNDER_YEARLY", str),
+        ("plan_monthly", "OSAP_SUPPORT_PAYPAL_PLAN_MONTHLY", str),
+        ("plan_yearly", "OSAP_SUPPORT_PAYPAL_PLAN_YEARLY", str),
+        ("default_role", "OSAP_SUPPORT_DEFAULT_ROLE", str),
     ],
     "smtp": [
         ("host", "OSAP_SUPPORT_SMTP_HOST", str),

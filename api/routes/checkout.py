@@ -2,7 +2,8 @@
 
 Adaptador HTTP fino: autenticación → validación DTO → use case → resultado real del
 proveedor. No contiene lógica de negocio ni SQL. El `plan_id` NUNCA llega del
-navegador: el backend lo resuelve desde `level`+`periodicity` (configuración interna).
+navegador: el backend lo resuelve desde `periodicity` (mensual/anual). El rol/nivel es
+independiente del cobro.
 """
 
 from __future__ import annotations
@@ -12,13 +13,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from application.use_cases.checkout_donation import CheckoutDonationUseCase
 from application.use_cases.checkout_membership import CheckoutMembershipUseCase
-from domain.entities import MembershipLevel, Periodicity
+from domain.entities import Periodicity
 from domain.ports.identity import IdentityError, IdentityResolver
 from domain.ports.payment import CheckoutSession
 
 router = APIRouter(prefix="/api/v1", tags=["checkout"])
 
-_SUPPORTED_LEVELS = {level.value for level in MembershipLevel}
 _SUPPORTED_PERIODICITIES = {periodicity.value for periodicity in Periodicity}
 
 
@@ -46,16 +46,11 @@ class DonationCheckoutRequest(BaseModel):
 class MembershipCheckoutRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    level: str
+    # `level` se acepta por compatibilidad con clientes antiguos pero se IGNORA:
+    # el rol no determina el plan (el plan depende solo de la periodicidad).
+    level: str | None = None
     periodicity: str
     return_url: str = Field(..., min_length=1)
-
-    @field_validator("level")
-    @classmethod
-    def _supported_level(cls, value: str) -> str:
-        if value not in _SUPPORTED_LEVELS:
-            raise ValueError(f"nivel no soportado: {value}")
-        return value
 
     @field_validator("periodicity")
     @classmethod
@@ -113,7 +108,6 @@ def checkout_membership(
     try:
         checkout = _membership_uc.execute(
             user_id=user_id,
-            level=body.level,
             periodicity=body.periodicity,
             return_url=body.return_url,
         )
