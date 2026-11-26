@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
+from api import admin_session
 from api.schemas.recognitions import (
     AdminGrantRequest,
     AdminRecognitionItem,
@@ -51,7 +52,9 @@ def _bearer_token(
     raise HTTPException(status_code=401, detail="autenticación requerida")
 
 def _require_admin(bearer: str) -> str:
-    """Autoriza: usuario con rol `support:admin` o service con scope `support:admin`."""
+    """Autoriza: sesión local del panel, usuario con rol o service con scope admin."""
+    if admin_session.is_admin_session(bearer):
+        return "service:support-admin-web"
     try:
         principal = _identity.resolve_principal(bearer)
     except IdentityError:

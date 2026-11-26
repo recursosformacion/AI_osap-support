@@ -14,6 +14,7 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
 
+from api import admin_session
 from api.routes.admin_payments import wire_admin_payments_router
 from api.routes.admin_recognitions import wire_admin_recognitions_router
 from api.routes.admin_web import wire_admin_web_router
@@ -228,6 +229,7 @@ def _paypal_provider(settings: Settings) -> PaymentProvider:
 def create_app(settings: Settings) -> FastAPI:
     app = FastAPI(title=settings.server.app_title, version=settings.server.app_version)
     app.state.settings = settings
+    app.state.admin_session_signer = admin_session.configure(settings)
     origins = settings.server.cors_origins
     if origins:
         from fastapi.middleware.cors import CORSMiddleware
@@ -426,7 +428,10 @@ def create_app(settings: Settings) -> FastAPI:
         )
     )
     app.include_router(
-        wire_admin_web_router(service_authenticator=_service_authenticator_for(settings))
+        wire_admin_web_router(
+            service_authenticator=_service_authenticator_for(settings),
+            admin_session_signer=admin_session.current(),
+        )
     )
 
     return app

@@ -21,6 +21,7 @@ import jwt
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
+from api import admin_session
 from domain.ports.identity import IdentityError, ServiceAuthenticator
 
 router = APIRouter(prefix="/api/v1/admin/web", tags=["admin-web"])
@@ -169,12 +170,17 @@ async def create_admin_session(request: Request) -> Response:
         if isinstance(exc, IdentityError):
             return JSONResponse(status_code=403, content={"detail": str(exc)})
         return JSONResponse(status_code=401, content={"detail": "service token inválido"})
-    max_age = int(claims.get("exp", 0)) - int(time.time())
-    if max_age <= 0:
-        return JSONResponse(status_code=401, content={"detail": "service token expirado"})
+    signer = admin_session.current()
+    if signer is not None:
+        cookie_value, max_age = signer.issue(client_id=str(claims.get("client_id") or ""))
+    else:
+        max_age = int(claims.get("exp", 0)) - int(time.time())
+        if max_age <= 0:
+            return JSONResponse(status_code=401, content={"detail": "service token expirado"})
+        cookie_value = token
     response = RedirectResponse(url=next_path, status_code=303)
     response.set_cookie(
-        key="osap_support_admin", value=token, max_age=max_age, path="/",
+        key="osap_support_admin", value=cookie_value, max_age=max_age, path="/",
         httponly=True, secure=True, samesite="lax"
     )
     response.headers["Cache-Control"] = "no-store"
@@ -189,6 +195,8 @@ def recognitions_page(request: Request) -> HTMLResponse:
     token = request.cookies.get("osap_support_admin", "")
     if not token:
         raise HTTPException(status_code=401, detail="sesión administrativa requerida")
+    if admin_session.is_admin_session(token):
+        return HTMLResponse(_PAGE, headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
     try:
         _service_authenticator.authenticate_service(token, required_scope=_ADMIN_SCOPE)
     except IdentityError as exc:
@@ -198,7 +206,12 @@ def recognitions_page(request: Request) -> HTMLResponse:
 _service_authenticator: ServiceAuthenticator
 
 
-def wire_admin_web_router(*, service_authenticator: ServiceAuthenticator) -> APIRouter:
+def wire_admin_web_router(
+    *,
+    service_authenticator: ServiceAuthenticator,
+    admin_session_signer: admin_session.AdminSessionSigner | None = None,
+) -> APIRouter:
     global _service_authenticator
     _service_authenticator = service_authenticator
+    admin_session.set_signer(admin_session_signer)
     return router

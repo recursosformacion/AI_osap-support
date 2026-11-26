@@ -62,7 +62,8 @@ class IdentityConfig(BaseSettings):
     jwks_uri: str = ""
     issuer: str = ""
     audience: str = "osap-support"
-    service_audience: str = ""  # audience separada obligatoria en production para service/M2M tokens
+    # audience separada obligatoria en production para service/M2M tokens
+    service_audience: str = ""
     service_client_id: str = ""
     service_client_secret: str = ""
     jwks_cache_ttl_seconds: int = 300
@@ -77,6 +78,10 @@ class ServerConfig:
     debug: bool = False
     cors_origins: list[str] = []
     admin_handoff_origins: list[str] = []
+    # Sesión propia del panel admin: el service token M2M (5 min) solo acredita el
+    # handoff; la cookie de navegación se firma aquí con vigencia independiente.
+    admin_session_secret: str = ""
+    admin_session_ttl_seconds: int = 28800
     # Identidad estática SOLO para dev/test (JWKS productivo queda ABIERTO, ADR-002).
     dev_token: str = "dev-token"
     dev_user_id: str = "dev-user"
@@ -179,6 +184,10 @@ class M2mConfig:
 # Mapeo de secciones TOML → env vars OSAP_SUPPORT_* (precedencia: env > toml > defaults).
 # `None` como convertidor = copia literal (str).
 _TOML_TO_ENV: dict[str, list[tuple[str, str, Any]]] = {
+    "server": [
+        ("admin_session_secret", "OSAP_SUPPORT_SERVER_ADMIN_SESSION_SECRET", str),
+        ("admin_session_ttl_seconds", "OSAP_SUPPORT_SERVER_ADMIN_SESSION_TTL_SECONDS", int),
+    ],
     "db": [
         ("host", "OSAP_SUPPORT_DB_HOST", str),
         ("port", "OSAP_SUPPORT_DB_PORT", int),
@@ -276,6 +285,7 @@ class Settings:
         No toca `os.environ`: cada Settings es independiente (hermético en tests).
         """
         sections = {
+            "server": self.server,
             "db": self.database,
             "identity": self.identity,
             "paypal": self.payment,
@@ -386,11 +396,28 @@ class Settings:
             origins = [o.strip() for o in origins.split(",") if o.strip()]
         self.server.cors_origins = list(origins)
         server_toml = self._toml_data.get("server", {})
-        handoff_origins = server_toml.get("admin_handoff_origins", []) if isinstance(server_toml, dict) else []
+        handoff_origins = (
+            server_toml.get("admin_handoff_origins", [])
+            if isinstance(server_toml, dict)
+            else []
+        )
         if isinstance(handoff_origins, str):
             handoff_origins = [o.strip() for o in handoff_origins.split(",") if o.strip()]
-        if os.environ.get("OSAP_SUPPORT_SERVER_ADMIN_HANDOFF_ORIGINS") is None and isinstance(handoff_origins, list):
-            self.server.admin_handoff_origins = [str(o).rstrip("/") for o in handoff_origins if str(o).strip()]
+        if (
+            os.environ.get("OSAP_SUPPORT_SERVER_ADMIN_HANDOFF_ORIGINS") is None
+            and isinstance(handoff_origins, list)
+        ):
+            self.server.admin_handoff_origins = [
+                str(o).rstrip("/") for o in handoff_origins if str(o).strip()
+            ]
+        if "admin_session_secret" in server and os.environ.get(
+            "OSAP_SUPPORT_SERVER_ADMIN_SESSION_SECRET"
+        ) is None:
+            self.server.admin_session_secret = str(server["admin_session_secret"])
+        if "admin_session_ttl_seconds" in server and os.environ.get(
+            "OSAP_SUPPORT_SERVER_ADMIN_SESSION_TTL_SECONDS"
+        ) is None:
+            self.server.admin_session_ttl_seconds = int(server["admin_session_ttl_seconds"])
 
         dbt = data.get("database", {})
         if not isinstance(dbt, dict):
@@ -433,7 +460,15 @@ def _apply_server_env(server: ServerConfig) -> None:
         server.cors_origins = [o.strip() for o in origins.split(",") if o.strip()]
     handoff_origins = os.environ.get("OSAP_SUPPORT_SERVER_ADMIN_HANDOFF_ORIGINS")
     if handoff_origins is not None:
-        server.admin_handoff_origins = [o.strip().rstrip("/") for o in handoff_origins.split(",") if o.strip()]
+        server.admin_handoff_origins = [
+            o.strip().rstrip("/") for o in handoff_origins.split(",") if o.strip()
+        ]
+    admin_session_secret = os.environ.get("OSAP_SUPPORT_SERVER_ADMIN_SESSION_SECRET")
+    if admin_session_secret is not None:
+        server.admin_session_secret = admin_session_secret
+    admin_session_ttl = os.environ.get("OSAP_SUPPORT_SERVER_ADMIN_SESSION_TTL_SECONDS")
+    if admin_session_ttl is not None:
+        server.admin_session_ttl_seconds = int(admin_session_ttl)
 
 
 def _coerce_typed(key: str, value: Any, conv: Any) -> Any:
